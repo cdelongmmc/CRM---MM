@@ -294,6 +294,9 @@
         
           // Initialize Firebase
           useEffect(() => {
+            // Always load from localStorage first
+            loadFromLocalStorage();
+            
             // Check if Firebase config is provided
             if (FIREBASE_CONFIG.apiKey !== "YOUR-API-KEY") {
               setIsFirebaseConfigured(true);
@@ -332,9 +335,6 @@
               };
               
               loadFirebase();
-            } else {
-              // No Firebase config - use localStorage
-              loadFromLocalStorage();
             }
             
             // Monitor online status
@@ -349,36 +349,45 @@
         
           // Set up Firebase real-time listeners
           const setupFirebaseListeners = (db) => {
+            let isInitialLoad = true;
+            
             // Customers listener
             db.ref('customers').on('value', (snapshot) => {
               const data = snapshot.val();
+              const localCustomers = JSON.parse(localStorage.getItem('customers') || '[]');
+              
+              // If Firebase is empty but we have local data, sync local to Firebase
+              if (!data && localCustomers.length > 0) {
+                console.log('Firebase empty, syncing local customers to Firebase');
+                const customersObj = {};
+                localCustomers.forEach(c => {
+                  customersObj[c.id] = c;
+                });
+                db.ref('customers').set(customersObj);
+                return;
+              }
+              
+              // If we have data from Firebase
               if (data) {
                 const customerArray = Object.entries(data).map(([id, customer]) => ({
                   ...customer,
                   id: id
                 }));
                 
-                // Check if localStorage has more recent data
-                const localCustomers = JSON.parse(localStorage.getItem('customers') || '[]');
-                const shouldUseFirebaseData = localCustomers.length === 0 || 
-                  customerArray.some(fbCustomer => {
-                    const localCustomer = localCustomers.find(lc => lc.id === fbCustomer.id);
-                    return !localCustomer || 
-                      (fbCustomer.updatedAt && localCustomer.updatedAt && 
-                       new Date(fbCustomer.updatedAt) > new Date(localCustomer.updatedAt));
-                  });
-                
-                if (shouldUseFirebaseData) {
-                  setCustomers(customerArray);
-                  localStorage.setItem('customers', JSON.stringify(customerArray));
-                } else {
-                  console.log('Local data is more recent, keeping local changes');
-                  // Sync local changes back to Firebase
+                // On initial load, prefer local data if it exists
+                if (isInitialLoad && localCustomers.length > 0) {
+                  console.log('Initial load - keeping local customer data');
+                  setCustomers(localCustomers);
+                  // Sync local to Firebase to ensure consistency
                   const customersObj = {};
                   localCustomers.forEach(c => {
                     customersObj[c.id] = c;
                   });
                   db.ref('customers').set(customersObj);
+                } else {
+                  // After initial load, use Firebase data
+                  setCustomers(customerArray);
+                  localStorage.setItem('customers', JSON.stringify(customerArray));
                 }
               }
             });
@@ -386,41 +395,116 @@
             // Opportunities listener
             db.ref('opportunities').on('value', (snapshot) => {
               const data = snapshot.val();
+              const localOpportunities = JSON.parse(localStorage.getItem('opportunities') || '[]');
+              
+              if (!data && localOpportunities.length > 0) {
+                console.log('Firebase empty, syncing local opportunities to Firebase');
+                const oppsObj = {};
+                localOpportunities.forEach(o => {
+                  oppsObj[o.id] = o;
+                });
+                db.ref('opportunities').set(oppsObj);
+                return;
+              }
+              
               if (data) {
                 const oppArray = Object.entries(data).map(([id, opp]) => ({
                   ...opp,
                   id: id
                 }));
-                setOpportunities(oppArray);
-                localStorage.setItem('opportunities', JSON.stringify(oppArray));
+                
+                if (isInitialLoad && localOpportunities.length > 0) {
+                  console.log('Initial load - keeping local opportunities data');
+                  setOpportunities(localOpportunities);
+                  const oppsObj = {};
+                  localOpportunities.forEach(o => {
+                    oppsObj[o.id] = o;
+                  });
+                  db.ref('opportunities').set(oppsObj);
+                } else {
+                  setOpportunities(oppArray);
+                  localStorage.setItem('opportunities', JSON.stringify(oppArray));
+                }
               }
             });
         
             // Activities listener
             db.ref('activities').on('value', (snapshot) => {
               const data = snapshot.val();
+              const localActivities = JSON.parse(localStorage.getItem('activities') || '[]');
+              
+              if (!data && localActivities.length > 0) {
+                console.log('Firebase empty, syncing local activities to Firebase');
+                const actsObj = {};
+                localActivities.forEach(a => {
+                  actsObj[a.id] = a;
+                });
+                db.ref('activities').set(actsObj);
+                return;
+              }
+              
               if (data) {
                 const actArray = Object.entries(data).map(([id, act]) => ({
                   ...act,
                   id: id
                 }));
-                setActivities(actArray);
-                localStorage.setItem('activities', JSON.stringify(actArray));
+                
+                if (isInitialLoad && localActivities.length > 0) {
+                  console.log('Initial load - keeping local activities data');
+                  setActivities(localActivities);
+                  const actsObj = {};
+                  localActivities.forEach(a => {
+                    actsObj[a.id] = a;
+                  });
+                  db.ref('activities').set(actsObj);
+                } else {
+                  setActivities(actArray);
+                  localStorage.setItem('activities', JSON.stringify(actArray));
+                }
               }
             });
         
             // Quotes listener
             db.ref('quotes').on('value', (snapshot) => {
               const data = snapshot.val();
+              const localQuotes = JSON.parse(localStorage.getItem('quotes') || '[]');
+              
+              if (!data && localQuotes.length > 0) {
+                console.log('Firebase empty, syncing local quotes to Firebase');
+                const quotesObj = {};
+                localQuotes.forEach(q => {
+                  quotesObj[q.id] = q;
+                });
+                db.ref('quotes').set(quotesObj);
+                return;
+              }
+              
               if (data) {
                 const quoteArray = Object.entries(data).map(([id, quote]) => ({
                   ...quote,
                   id: id
                 }));
-                setQuotes(quoteArray);
-                localStorage.setItem('quotes', JSON.stringify(quoteArray));
+                
+                if (isInitialLoad && localQuotes.length > 0) {
+                  console.log('Initial load - keeping local quotes data');
+                  setQuotes(localQuotes);
+                  const quotesObj = {};
+                  localQuotes.forEach(q => {
+                    quotesObj[q.id] = q;
+                  });
+                  db.ref('quotes').set(quotesObj);
+                } else {
+                  setQuotes(quoteArray);
+                  localStorage.setItem('quotes', JSON.stringify(quoteArray));
+                }
               }
             });
+        
+            // After initial load, set flag to false
+            setTimeout(() => {
+              isInitialLoad = false;
+              console.log('Initial Firebase load complete');
+            }, 2000);
         
             setLastSync(new Date().toISOString());
           };
@@ -432,8 +516,8 @@
             const loadedQuotes = JSON.parse(localStorage.getItem('quotes') || '[]');
             const loadedActivities = JSON.parse(localStorage.getItem('activities') || '[]');
         
-            if (loadedCustomers.length === 0) {
-              // Initialize with sample data only if no data exists
+            if (loadedCustomers.length === 0 && loadedOpportunities.length === 0 && loadedActivities.length === 0) {
+              // Initialize with sample data only if no data exists at all
               const sampleCustomers = [
                 {
                   id: '1',
@@ -444,7 +528,9 @@
                   phone: '(555) 123-4567',
                   status: 'active',
                   pipelineStage: 'quote_out',
-                  lastActivity: new Date().toISOString()
+                  lastActivity: new Date().toISOString(),
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString()
                 },
                 {
                   id: '2',
@@ -455,7 +541,9 @@
                   phone: '(555) 987-6543',
                   status: 'active',
                   pipelineStage: 'lead',
-                  lastActivity: new Date().toISOString()
+                  lastActivity: new Date().toISOString(),
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString()
                 }
               ];
               
@@ -483,7 +571,8 @@
                   notes: 'Sent detailed quote with volume pricing',
                   completed: true,
                   pipelineStage: 'quote_out',
-                  followUpCreated: false
+                  followUpCreated: false,
+                  createdAt: new Date().toISOString()
                 },
                 {
                   id: '2',
@@ -495,14 +584,23 @@
                   notes: 'Scheduled from customer tab - discuss pricing and delivery timeline',
                   completed: false,
                   pipelineStage: 'quote_out',
-                  followUpCreated: false
+                  followUpCreated: false,
+                  createdAt: new Date().toISOString()
                 }
               ];
               
               setCustomers(sampleCustomers);
               setOpportunities(sampleOpportunities);
               setActivities(sampleActivities);
+              setQuotes([]);
+              
+              // Save sample data to localStorage
+              localStorage.setItem('customers', JSON.stringify(sampleCustomers));
+              localStorage.setItem('opportunities', JSON.stringify(sampleOpportunities));
+              localStorage.setItem('activities', JSON.stringify(sampleActivities));
+              localStorage.setItem('quotes', '[]');
             } else {
+              // Load existing data
               setCustomers(loadedCustomers);
               setOpportunities(loadedOpportunities);
               setQuotes(loadedQuotes);
@@ -676,31 +774,34 @@
             // Save to localStorage
             localStorage.setItem('opportunities', JSON.stringify(updatedOpportunities));
             
-            // Save to Firebase
-            if (firebaseDb) {
-              const oppsObj = {};
-              updatedOpportunities.forEach(o => {
-                oppsObj[o.id] = o;
-              });
-              saveToFirebase('opportunities', oppsObj);
+            // Save to Firebase - add individual opportunity
+            if (firebaseDb && isOnline) {
+              firebaseDb.ref(`opportunities/${newOpportunity.id}`)
+                .set(newOpportunity)
+                .then(() => {
+                  console.log('Opportunity added to Firebase');
+                  setLastSync(new Date().toISOString());
+                })
+                .catch((error) => {
+                  console.error('Error adding opportunity to Firebase:', error);
+                  alert('Failed to sync opportunity to cloud. Your changes are saved locally.');
+                });
             }
             
             // Update customer pipeline stage if creating opportunity
             if (formData.customerId) {
-              const updatedCustomers = customers.map(c => 
-                c.id === formData.customerId 
-                  ? {...c, pipelineStage: 'qualified'} 
-                  : c
-              );
-              setCustomers(updatedCustomers);
-              localStorage.setItem('customers', JSON.stringify(updatedCustomers));
-              
-              if (firebaseDb) {
-                const customersObj = {};
-                updatedCustomers.forEach(c => {
-                  customersObj[c.id] = c;
-                });
-                saveToFirebase('customers', customersObj);
+              const customer = customers.find(c => c.id === formData.customerId);
+              if (customer) {
+                const updatedCustomer = {...customer, pipelineStage: 'qualified', updatedAt: new Date().toISOString()};
+                const updatedCustomers = customers.map(c => 
+                  c.id === formData.customerId ? updatedCustomer : c
+                );
+                setCustomers(updatedCustomers);
+                localStorage.setItem('customers', JSON.stringify(updatedCustomers));
+                
+                if (firebaseDb && isOnline) {
+                  firebaseDb.ref(`customers/${formData.customerId}`).set(updatedCustomer);
+                }
               }
             }
             
@@ -716,19 +817,16 @@
                 time: '10:00 AM',
                 notes: `Follow up on new opportunity: ${formData.title}`,
                 completed: false,
-                pipelineStage: 'qualified'
+                pipelineStage: 'qualified',
+                createdAt: new Date().toISOString()
               };
               
               const updatedActivities = [...activities, newActivity];
               setActivities(updatedActivities);
               localStorage.setItem('activities', JSON.stringify(updatedActivities));
               
-              if (firebaseDb) {
-                const actsObj = {};
-                updatedActivities.forEach(a => {
-                  actsObj[a.id] = a;
-                });
-                saveToFirebase('activities', actsObj);
+              if (firebaseDb && isOnline) {
+                firebaseDb.ref(`activities/${newActivity.id}`).set(newActivity);
               }
             }
             
@@ -751,13 +849,18 @@
             // Save to localStorage
             localStorage.setItem('quotes', JSON.stringify(updatedQuotes));
             
-            // Save to Firebase
-            if (firebaseDb) {
-              const quotesObj = {};
-              updatedQuotes.forEach(q => {
-                quotesObj[q.id] = q;
-              });
-              saveToFirebase('quotes', quotesObj);
+            // Save to Firebase - add individual quote
+            if (firebaseDb && isOnline) {
+              firebaseDb.ref(`quotes/${newQuote.id}`)
+                .set(newQuote)
+                .then(() => {
+                  console.log('Quote added to Firebase');
+                  setLastSync(new Date().toISOString());
+                })
+                .catch((error) => {
+                  console.error('Error adding quote to Firebase:', error);
+                  alert('Failed to sync quote to cloud. Your changes are saved locally.');
+                });
             }
             
             setShowModal(null);
@@ -770,7 +873,8 @@
               ...formData,
               completed: false,
               followUpCreated: false,
-              pipelineStage: formData.pipelineStage || customers.find(c => c.id === formData.customerId)?.pipelineStage || 'lead'
+              pipelineStage: formData.pipelineStage || customers.find(c => c.id === formData.customerId)?.pipelineStage || 'lead',
+              createdAt: new Date().toISOString()
             };
             
             const updatedActivities = [...activities, newActivity];
@@ -779,50 +883,61 @@
             // Save to localStorage
             localStorage.setItem('activities', JSON.stringify(updatedActivities));
             
-            // Save to Firebase
-            if (firebaseDb) {
-              const actsObj = {};
-              updatedActivities.forEach(a => {
-                actsObj[a.id] = a;
-              });
-              saveToFirebase('activities', actsObj);
+            // Save to Firebase - add individual activity
+            if (firebaseDb && isOnline) {
+              firebaseDb.ref(`activities/${newActivity.id}`)
+                .set(newActivity)
+                .then(() => {
+                  console.log('Activity added to Firebase');
+                  setLastSync(new Date().toISOString());
+                })
+                .catch((error) => {
+                  console.error('Error adding activity to Firebase:', error);
+                  alert('Failed to sync activity to cloud. Your changes are saved locally.');
+                });
             }
             
             // Update customer's pipeline stage if provided
             if (formData.pipelineStage && formData.customerId) {
-              const updatedCustomers = customers.map(c => 
-                c.id === formData.customerId 
-                  ? {...c, pipelineStage: formData.pipelineStage, lastActivity: new Date().toISOString()} 
-                  : c
-              );
-              setCustomers(updatedCustomers);
-              localStorage.setItem('customers', JSON.stringify(updatedCustomers));
-              
-              if (firebaseDb) {
-                const customersObj = {};
-                updatedCustomers.forEach(c => {
-                  customersObj[c.id] = c;
-                });
-                saveToFirebase('customers', customersObj);
+              const updatedCustomer = customers.find(c => c.id === formData.customerId);
+              if (updatedCustomer) {
+                const updated = {
+                  ...updatedCustomer,
+                  pipelineStage: formData.pipelineStage,
+                  lastActivity: new Date().toISOString()
+                };
+                
+                const updatedCustomers = customers.map(c => 
+                  c.id === formData.customerId ? updated : c
+                );
+                setCustomers(updatedCustomers);
+                localStorage.setItem('customers', JSON.stringify(updatedCustomers));
+                
+                if (firebaseDb && isOnline) {
+                  firebaseDb.ref(`customers/${formData.customerId}`).set(updated);
+                }
               }
             }
             
             // Update opportunity's last activity if linked
             if (formData.opportunityId) {
-              const updatedOpportunities = opportunities.map(o => 
-                o.id === formData.opportunityId 
-                  ? {...o, lastActivity: new Date().toISOString(), lastActivitySubject: formData.subject} 
-                  : o
-              );
-              setOpportunities(updatedOpportunities);
-              localStorage.setItem('opportunities', JSON.stringify(updatedOpportunities));
-              
-              if (firebaseDb) {
-                const oppsObj = {};
-                updatedOpportunities.forEach(o => {
-                  oppsObj[o.id] = o;
-                });
-                saveToFirebase('opportunities', oppsObj);
+              const updatedOpp = opportunities.find(o => o.id === formData.opportunityId);
+              if (updatedOpp) {
+                const updated = {
+                  ...updatedOpp,
+                  lastActivity: new Date().toISOString(),
+                  lastActivitySubject: formData.subject
+                };
+                
+                const updatedOpportunities = opportunities.map(o => 
+                  o.id === formData.opportunityId ? updated : o
+                );
+                setOpportunities(updatedOpportunities);
+                localStorage.setItem('opportunities', JSON.stringify(updatedOpportunities));
+                
+                if (firebaseDb && isOnline) {
+                  firebaseDb.ref(`opportunities/${formData.opportunityId}`).set(updated);
+                }
               }
             }
             
@@ -837,19 +952,27 @@
           const handleDrop = (e, newStage) => {
             e.preventDefault();
             const oppId = e.dataTransfer.getData('opportunityId');
-            const updatedOpportunities = opportunities.map(o => o.id === oppId ? {...o, stage: newStage} : o);
-            setOpportunities(updatedOpportunities);
+            const opportunity = opportunities.find(o => o.id === oppId);
             
-            // Save to localStorage
-            localStorage.setItem('opportunities', JSON.stringify(updatedOpportunities));
-            
-            // Save to Firebase
-            if (firebaseDb) {
-              const oppsObj = {};
-              updatedOpportunities.forEach(o => {
-                oppsObj[o.id] = o;
-              });
-              saveToFirebase('opportunities', oppsObj);
+            if (opportunity) {
+              const updatedOpp = {...opportunity, stage: newStage, updatedAt: new Date().toISOString()};
+              const updatedOpportunities = opportunities.map(o => o.id === oppId ? updatedOpp : o);
+              setOpportunities(updatedOpportunities);
+              
+              // Save to localStorage
+              localStorage.setItem('opportunities', JSON.stringify(updatedOpportunities));
+              
+              // Save to Firebase - update individual opportunity
+              if (firebaseDb && isOnline) {
+                firebaseDb.ref(`opportunities/${oppId}`)
+                  .set(updatedOpp)
+                  .then(() => {
+                    console.log('Opportunity stage updated in Firebase');
+                  })
+                  .catch((error) => {
+                    console.error('Error updating opportunity stage:', error);
+                  });
+              }
             }
           };
         
@@ -1488,33 +1611,37 @@
             const completedActivities = filteredActivities.filter(a => a.completed);
         
             const markComplete = (activity) => {
+              const updatedActivity = {...activity, completed: true, completedDate: new Date().toISOString()};
               const updatedActivities = activities.map(a => 
-                a.id === activity.id ? {...a, completed: true, completedDate: new Date().toISOString()} : a
+                a.id === activity.id ? updatedActivity : a
               );
               setActivities(updatedActivities);
               localStorage.setItem('activities', JSON.stringify(updatedActivities));
               
-              if (firebaseDb) {
-                const actsObj = {};
-                updatedActivities.forEach(a => {
-                  actsObj[a.id] = a;
-                });
-                saveToFirebase('activities', actsObj);
+              if (firebaseDb && isOnline) {
+                firebaseDb.ref(`activities/${activity.id}`)
+                  .set(updatedActivity)
+                  .then(() => {
+                    console.log('Activity marked complete in Firebase');
+                  })
+                  .catch((error) => {
+                    console.error('Error updating activity:', error);
+                  });
               }
               
               // Update customer's last activity
-              const updatedCustomers = customers.map(c => 
-                c.id === activity.customerId ? {...c, lastActivity: new Date().toISOString()} : c
-              );
-              setCustomers(updatedCustomers);
-              localStorage.setItem('customers', JSON.stringify(updatedCustomers));
-              
-              if (firebaseDb) {
-                const customersObj = {};
-                updatedCustomers.forEach(c => {
-                  customersObj[c.id] = c;
-                });
-                saveToFirebase('customers', customersObj);
+              const customer = customers.find(c => c.id === activity.customerId);
+              if (customer) {
+                const updatedCustomer = {...customer, lastActivity: new Date().toISOString()};
+                const updatedCustomers = customers.map(c => 
+                  c.id === activity.customerId ? updatedCustomer : c
+                );
+                setCustomers(updatedCustomers);
+                localStorage.setItem('customers', JSON.stringify(updatedCustomers));
+                
+                if (firebaseDb && isOnline) {
+                  firebaseDb.ref(`customers/${activity.customerId}`).set(updatedCustomer);
+                }
               }
               
               // Show follow-up prompt
@@ -1532,53 +1659,52 @@
                 notes: followUpData.notes,
                 completed: false,
                 followUpCreated: false,
-                pipelineStage: followUpData.pipelineStage
+                pipelineStage: followUpData.pipelineStage,
+                createdAt: new Date().toISOString()
               };
               
               const updatedActivities = [...activities, newActivity];
               setActivities(updatedActivities);
               localStorage.setItem('activities', JSON.stringify(updatedActivities));
               
-              if (firebaseDb) {
-                const actsObj = {};
-                updatedActivities.forEach(a => {
-                  actsObj[a.id] = a;
-                });
-                saveToFirebase('activities', actsObj);
+              if (firebaseDb && isOnline) {
+                firebaseDb.ref(`activities/${newActivity.id}`)
+                  .set(newActivity)
+                  .then(() => {
+                    console.log('Follow-up activity created in Firebase');
+                  })
+                  .catch((error) => {
+                    console.error('Error creating follow-up:', error);
+                  });
               }
               
               // Update customer pipeline stage
               if (followUpData.pipelineStage) {
-                const updatedCustomers = customers.map(c => 
-                  c.id === originalActivity.customerId 
-                    ? {...c, pipelineStage: followUpData.pipelineStage} 
-                    : c
-                );
-                setCustomers(updatedCustomers);
-                localStorage.setItem('customers', JSON.stringify(updatedCustomers));
-                
-                if (firebaseDb) {
-                  const customersObj = {};
-                  updatedCustomers.forEach(c => {
-                    customersObj[c.id] = c;
-                  });
-                  saveToFirebase('customers', customersObj);
+                const customer = customers.find(c => c.id === originalActivity.customerId);
+                if (customer) {
+                  const updatedCustomer = {...customer, pipelineStage: followUpData.pipelineStage, updatedAt: new Date().toISOString()};
+                  const updatedCustomers = customers.map(c => 
+                    c.id === originalActivity.customerId ? updatedCustomer : c
+                  );
+                  setCustomers(updatedCustomers);
+                  localStorage.setItem('customers', JSON.stringify(updatedCustomers));
+                  
+                  if (firebaseDb && isOnline) {
+                    firebaseDb.ref(`customers/${originalActivity.customerId}`).set(updatedCustomer);
+                  }
                 }
               }
               
               // Mark original activity as having follow-up
-              const updatedActivitiesWithFollowUp = updatedActivities.map(a => 
-                a.id === originalActivity.id ? {...a, followUpCreated: true} : a
+              const updatedOriginal = {...originalActivity, followUpCreated: true};
+              const finalActivities = updatedActivities.map(a => 
+                a.id === originalActivity.id ? updatedOriginal : a
               );
-              setActivities(updatedActivitiesWithFollowUp);
-              localStorage.setItem('activities', JSON.stringify(updatedActivitiesWithFollowUp));
+              setActivities(finalActivities);
+              localStorage.setItem('activities', JSON.stringify(finalActivities));
               
-              if (firebaseDb) {
-                const actsObj = {};
-                updatedActivitiesWithFollowUp.forEach(a => {
-                  actsObj[a.id] = a;
-                });
-                saveToFirebase('activities', actsObj);
+              if (firebaseDb && isOnline) {
+                firebaseDb.ref(`activities/${originalActivity.id}`).set(updatedOriginal);
               }
               
               setShowFollowUp(null);
@@ -1590,12 +1716,15 @@
                 setActivities(updatedActivities);
                 localStorage.setItem('activities', JSON.stringify(updatedActivities));
                 
-                if (firebaseDb) {
-                  const actsObj = {};
-                  updatedActivities.forEach(a => {
-                    actsObj[a.id] = a;
-                  });
-                  saveToFirebase('activities', actsObj);
+                if (firebaseDb && isOnline) {
+                  firebaseDb.ref(`activities/${id}`)
+                    .remove()
+                    .then(() => {
+                      console.log('Activity deleted from Firebase');
+                    })
+                    .catch((error) => {
+                      console.error('Error deleting activity:', error);
+                    });
                 }
               }
             };
