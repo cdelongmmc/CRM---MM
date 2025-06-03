@@ -357,8 +357,29 @@
                   ...customer,
                   id: id
                 }));
-                setCustomers(customerArray);
-                localStorage.setItem('customers', JSON.stringify(customerArray));
+                
+                // Check if localStorage has more recent data
+                const localCustomers = JSON.parse(localStorage.getItem('customers') || '[]');
+                const shouldUseFirebaseData = localCustomers.length === 0 || 
+                  customerArray.some(fbCustomer => {
+                    const localCustomer = localCustomers.find(lc => lc.id === fbCustomer.id);
+                    return !localCustomer || 
+                      (fbCustomer.updatedAt && localCustomer.updatedAt && 
+                       new Date(fbCustomer.updatedAt) > new Date(localCustomer.updatedAt));
+                  });
+                
+                if (shouldUseFirebaseData) {
+                  setCustomers(customerArray);
+                  localStorage.setItem('customers', JSON.stringify(customerArray));
+                } else {
+                  console.log('Local data is more recent, keeping local changes');
+                  // Sync local changes back to Firebase
+                  const customersObj = {};
+                  localCustomers.forEach(c => {
+                    customersObj[c.id] = c;
+                  });
+                  db.ref('customers').set(customersObj);
+                }
               }
             });
         
@@ -496,8 +517,10 @@
                 setIsSyncing(true);
                 await firebaseDb.ref(path).set(data);
                 setLastSync(new Date().toISOString());
+                console.log('Successfully saved to Firebase:', path);
               } catch (error) {
                 console.error('Error saving to Firebase:', error);
+                alert('Failed to sync changes to cloud. Your changes are saved locally.');
               } finally {
                 setIsSyncing(false);
               }
@@ -513,7 +536,8 @@
               industry: formData.industry === 'Other' ? (formData.customIndustry || 'Other') : formData.industry,
               status: formData.status || 'prospect',
               pipelineStage: formData.pipelineStage || 'lead',
-              createdAt: new Date().toISOString()
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
             };
             
             // Remove customIndustry from the saved data to keep it clean
@@ -525,13 +549,18 @@
             // Save to localStorage
             localStorage.setItem('customers', JSON.stringify(updatedCustomers));
             
-            // Save to Firebase
-            if (firebaseDb) {
-              const customersObj = {};
-              updatedCustomers.forEach(c => {
-                customersObj[c.id] = c;
-              });
-              saveToFirebase('customers', customersObj);
+            // Save to Firebase - add individual customer
+            if (firebaseDb && isOnline) {
+              firebaseDb.ref(`customers/${newCustomer.id}`)
+                .set(newCustomer)
+                .then(() => {
+                  console.log('Customer added to Firebase');
+                  setLastSync(new Date().toISOString());
+                })
+                .catch((error) => {
+                  console.error('Error adding customer to Firebase:', error);
+                  alert('Failed to sync new customer to cloud. Your changes are saved locally.');
+                });
             }
             
             setShowModal(null);
@@ -549,23 +578,32 @@
             // Remove customIndustry from the saved data to keep it clean
             delete updatedData.customIndustry;
             
+            const updatedCustomer = { 
+              ...editingCustomer, 
+              ...updatedData, 
+              updatedAt: new Date().toISOString() 
+            };
+            
             const updatedCustomers = customers.map(c => 
-              c.id === editingCustomer.id 
-                ? { ...editingCustomer, ...updatedData, updatedAt: new Date().toISOString() }
-                : c
+              c.id === editingCustomer.id ? updatedCustomer : c
             );
             setCustomers(updatedCustomers);
             
             // Save to localStorage
             localStorage.setItem('customers', JSON.stringify(updatedCustomers));
             
-            // Save to Firebase
-            if (firebaseDb) {
-              const customersObj = {};
-              updatedCustomers.forEach(c => {
-                customersObj[c.id] = c;
-              });
-              saveToFirebase('customers', customersObj);
+            // Save to Firebase - update individual customer instead of entire collection
+            if (firebaseDb && isOnline) {
+              firebaseDb.ref(`customers/${editingCustomer.id}`)
+                .set(updatedCustomer)
+                .then(() => {
+                  console.log('Customer updated in Firebase');
+                  setLastSync(new Date().toISOString());
+                })
+                .catch((error) => {
+                  console.error('Error updating customer in Firebase:', error);
+                  alert('Failed to sync customer update to cloud. Your changes are saved locally.');
+                });
             }
             
             setShowModal(null);
@@ -581,13 +619,18 @@
               // Save to localStorage
               localStorage.setItem('customers', JSON.stringify(updatedCustomers));
               
-              // Save to Firebase
-              if (firebaseDb) {
-                const customersObj = {};
-                updatedCustomers.forEach(c => {
-                  customersObj[c.id] = c;
-                });
-                saveToFirebase('customers', customersObj);
+              // Delete from Firebase
+              if (firebaseDb && isOnline) {
+                firebaseDb.ref(`customers/${customerId}`)
+                  .remove()
+                  .then(() => {
+                    console.log('Customer deleted from Firebase');
+                    setLastSync(new Date().toISOString());
+                  })
+                  .catch((error) => {
+                    console.error('Error deleting customer from Firebase:', error);
+                    alert('Failed to sync deletion to cloud. Your changes are saved locally.');
+                  });
               }
               
               // Also clean up related opportunities and activities
@@ -599,18 +642,20 @@
               setActivities(updatedActivities);
               localStorage.setItem('activities', JSON.stringify(updatedActivities));
               
-              if (firebaseDb) {
-                const oppsObj = {};
-                updatedOpportunities.forEach(o => {
-                  oppsObj[o.id] = o;
-                });
-                saveToFirebase('opportunities', oppsObj);
+              if (firebaseDb && isOnline) {
+                // Remove related opportunities
+                opportunities
+                  .filter(o => o.customerId === customerId)
+                  .forEach(opp => {
+                    firebaseDb.ref(`opportunities/${opp.id}`).remove();
+                  });
                 
-                const actsObj = {};
-                updatedActivities.forEach(a => {
-                  actsObj[a.id] = a;
-                });
-                saveToFirebase('activities', actsObj);
+                // Remove related activities
+                activities
+                  .filter(a => a.customerId === customerId)
+                  .forEach(act => {
+                    firebaseDb.ref(`activities/${act.id}`).remove();
+                  });
               }
             }
           };
@@ -1152,7 +1197,8 @@
                                         contact: customer.contact,
                                         email: customer.email,
                                         phone: customer.phone,
-                                        status: customer.status
+                                        status: customer.status,
+                                        pipelineStage: customer.pipelineStage
                                       });
                                       setShowModal('customer');
                                     }}
