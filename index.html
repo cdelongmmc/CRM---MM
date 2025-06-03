@@ -209,6 +209,7 @@
           const [lastSync, setLastSync] = useState(null);
           const [firebaseDb, setFirebaseDb] = useState(null);
           const [isFirebaseConfigured, setIsFirebaseConfigured] = useState(false);
+          const [editingCustomer, setEditingCustomer] = useState(null);
         
           // Customer Pipeline Stages
           const customerStages = [
@@ -220,6 +221,16 @@
             { id: 'po_received', name: 'PO Received', color: 'bg-green-500' },
             { id: 'fulfillment', name: 'In Fulfillment', color: 'bg-indigo-500' },
             { id: 'delivered', name: 'Delivered', color: 'bg-teal-500' }
+          ];
+
+          // Pipeline stages
+          const pipelineStages = [
+            { id: 'new', name: 'New Lead', color: 'bg-gray-500' },
+            { id: 'qualified', name: 'Qualified', color: 'bg-blue-500' },
+            { id: 'quoted', name: 'Quoted', color: 'bg-purple-500' },
+            { id: 'negotiation', name: 'Negotiation', color: 'bg-yellow-500' },
+            { id: 'won', name: 'Won', color: 'bg-green-500' },
+            { id: 'lost', name: 'Lost', color: 'bg-red-500' }
           ];
         
           // Initialize Firebase
@@ -437,6 +448,74 @@
             
             setShowModal(null);
             setFormData({});
+            setEditingCustomer(null);
+          };
+
+          const handleUpdateCustomer = () => {
+            const updatedCustomers = customers.map(c => 
+              c.id === editingCustomer.id 
+                ? { ...editingCustomer, ...formData, updatedAt: new Date().toISOString() }
+                : c
+            );
+            setCustomers(updatedCustomers);
+            
+            // Save to localStorage
+            localStorage.setItem('customers', JSON.stringify(updatedCustomers));
+            
+            // Save to Firebase
+            if (firebaseDb) {
+              const customersObj = {};
+              updatedCustomers.forEach(c => {
+                customersObj[c.id] = c;
+              });
+              saveToFirebase('customers', customersObj);
+            }
+            
+            setShowModal(null);
+            setFormData({});
+            setEditingCustomer(null);
+          };
+
+          const handleDeleteCustomer = (customerId) => {
+            if (window.confirm('Are you sure you want to delete this customer? This action cannot be undone.')) {
+              const updatedCustomers = customers.filter(c => c.id !== customerId);
+              setCustomers(updatedCustomers);
+              
+              // Save to localStorage
+              localStorage.setItem('customers', JSON.stringify(updatedCustomers));
+              
+              // Save to Firebase
+              if (firebaseDb) {
+                const customersObj = {};
+                updatedCustomers.forEach(c => {
+                  customersObj[c.id] = c;
+                });
+                saveToFirebase('customers', customersObj);
+              }
+              
+              // Also clean up related opportunities and activities
+              const updatedOpportunities = opportunities.filter(o => o.customerId !== customerId);
+              setOpportunities(updatedOpportunities);
+              localStorage.setItem('opportunities', JSON.stringify(updatedOpportunities));
+              
+              const updatedActivities = activities.filter(a => a.customerId !== customerId);
+              setActivities(updatedActivities);
+              localStorage.setItem('activities', JSON.stringify(updatedActivities));
+              
+              if (firebaseDb) {
+                const oppsObj = {};
+                updatedOpportunities.forEach(o => {
+                  oppsObj[o.id] = o;
+                });
+                saveToFirebase('opportunities', oppsObj);
+                
+                const actsObj = {};
+                updatedActivities.forEach(a => {
+                  actsObj[a.id] = a;
+                });
+                saveToFirebase('activities', actsObj);
+              }
+            }
           };
         
           const handleAddOpportunity = () => {
@@ -632,21 +711,11 @@
             }
           };
         
-          // Pipeline stages
-          const pipelineStages = [
-            { id: 'new', name: 'New Lead', color: 'bg-gray-500' },
-            { id: 'qualified', name: 'Qualified', color: 'bg-blue-500' },
-            { id: 'quoted', name: 'Quoted', color: 'bg-purple-500' },
-            { id: 'negotiation', name: 'Negotiation', color: 'bg-yellow-500' },
-            { id: 'won', name: 'Won', color: 'bg-green-500' },
-            { id: 'lost', name: 'Lost', color: 'bg-red-500' }
-          ];
-        
           // Metrics calculation
           const metrics = {
             openOpportunities: opportunities.filter(o => o.stage !== 'won' && o.stage !== 'lost').length,
-            totalPipeline: opportunities.filter(o => o.stage !== 'won' && o.stage !== 'lost').reduce((sum, o) => sum + o.value, 0),
-            wonDeals: opportunities.filter(o => o.stage === 'won').reduce((sum, o) => sum + o.value, 0),
+            totalPipeline: opportunities.filter(o => o.stage !== 'won' && o.stage !== 'lost').reduce((sum, o) => sum + (o.value || 0), 0),
+            wonDeals: opportunities.filter(o => o.stage === 'won').reduce((sum, o) => sum + (o.value || 0), 0),
             activeCustomers: customers.filter(c => c.status === 'active').length
           };
         
@@ -668,7 +737,13 @@
                 ].map(item => (
                   <button
                     key={item.id}
-                    onClick={() => setActiveView(item.id)}
+                    onClick={() => {
+                      setActiveView(item.id);
+                      // Clear any open modals when switching tabs
+                      setShowModal(null);
+                      setFormData({});
+                      setEditingCustomer(null);
+                    }}
                     className={`w-full flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors ${
                       activeView === item.id ? 'bg-blue-600' : 'hover:bg-gray-800'
                     }`}
@@ -737,7 +812,11 @@
                     <TrendingUp className="text-purple-500" size={24} />
                     <span className="text-sm text-gray-500">Win Rate</span>
                   </div>
-                  <p className="text-2xl font-bold">0%</p>
+                  <p className="text-2xl font-bold">
+                    {opportunities.length > 0 
+                      ? Math.round((opportunities.filter(o => o.stage === 'won').length / opportunities.length) * 100)
+                      : 0}%
+                  </p>
                 </div>
                 
                 <div className="bg-white rounded-lg shadow p-6">
@@ -784,12 +863,29 @@
                 
                 <div className="bg-white rounded-lg shadow p-6">
                   <h3 className="text-xl font-semibold mb-4">Top Opportunities</h3>
-                  {opportunities.slice(0, 5).map(opp => (
-                    <div key={opp.id} className="p-3 bg-gray-50 rounded mb-2">
-                      <p className="font-medium">{opp.title}</p>
-                      <p className="text-sm text-gray-600">${(opp.value / 1000).toFixed(0)}K</p>
+                  {opportunities.length === 0 ? (
+                    <p className="text-gray-400">No opportunities yet</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {opportunities
+                        .filter(o => o.stage !== 'won' && o.stage !== 'lost')
+                        .sort((a, b) => (b.value || 0) - (a.value || 0))
+                        .slice(0, 5)
+                        .map(opp => (
+                          <div key={opp.id} className="p-3 bg-gray-50 rounded">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <p className="font-medium">{opp.title}</p>
+                                <p className="text-sm text-gray-600">
+                                  {customers.find(c => c.id === opp.customerId)?.name}
+                                </p>
+                              </div>
+                              <p className="text-sm font-semibold">${((opp.value || 0) / 1000).toFixed(0)}K</p>
+                            </div>
+                          </div>
+                        ))}
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
             </div>
@@ -801,7 +897,11 @@
               <div className="flex justify-between items-center mb-8">
                 <h2 className="text-3xl font-bold">Customers</h2>
                 <button
-                  onClick={() => setShowModal('customer')}
+                  onClick={() => {
+                    setEditingCustomer(null);
+                    setFormData({});
+                    setShowModal('customer');
+                  }}
                   className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
                 >
                   <Plus size={20} />
@@ -820,44 +920,75 @@
                   />
                 </div>
                 
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b">
-                    <tr>
-                      <th className="text-left p-4">Company</th>
-                      <th className="text-left p-4">Contact</th>
-                      <th className="text-left p-4">Email</th>
-                      <th className="text-left p-4">Phone</th>
-                      <th className="text-left p-4">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {customers
-                      .filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()))
-                      .map(customer => {
-                        const stage = customerStages.find(s => s.id === customer.pipelineStage);
-                        return (
-                          <tr key={customer.id} className="border-b hover:bg-gray-50">
-                            <td className="p-4">{customer.name}</td>
-                            <td className="p-4">{customer.contact}</td>
-                            <td className="p-4">{customer.email}</td>
-                            <td className="p-4">{customer.phone}</td>
-                            <td className="p-4">
-                              <span className={`px-2 py-1 text-xs rounded-full ${
-                                customer.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                              }`}>
-                                {customer.status}
-                              </span>
-                              {stage && (
-                                <span className={`ml-2 px-2 py-1 text-xs rounded-full text-white ${stage.color}`}>
-                                  {stage.name}
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b">
+                      <tr>
+                        <th className="text-left p-4">Company</th>
+                        <th className="text-left p-4">Contact</th>
+                        <th className="text-left p-4">Email</th>
+                        <th className="text-left p-4">Phone</th>
+                        <th className="text-left p-4">Status</th>
+                        <th className="text-left p-4">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {customers
+                        .filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                        .map(customer => {
+                          const stage = customerStages.find(s => s.id === customer.pipelineStage);
+                          return (
+                            <tr key={customer.id} className="border-b hover:bg-gray-50">
+                              <td className="p-4">{customer.name}</td>
+                              <td className="p-4">{customer.contact}</td>
+                              <td className="p-4">{customer.email}</td>
+                              <td className="p-4">{customer.phone}</td>
+                              <td className="p-4">
+                                <span className={`px-2 py-1 text-xs rounded-full ${
+                                  customer.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {customer.status}
                                 </span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
+                                {stage && (
+                                  <span className={`ml-2 px-2 py-1 text-xs rounded-full text-white ${stage.color}`}>
+                                    {stage.name}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-4">
+                                <div className="flex items-center space-x-2">
+                                  <button
+                                    onClick={() => {
+                                      setEditingCustomer(customer);
+                                      setFormData({
+                                        name: customer.name,
+                                        contact: customer.contact,
+                                        email: customer.email,
+                                        phone: customer.phone,
+                                        status: customer.status
+                                      });
+                                      setShowModal('customer');
+                                    }}
+                                    className="text-blue-600 hover:text-blue-800"
+                                    title="Edit Customer"
+                                  >
+                                    <Edit2 size={16} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteCustomer(customer.id)}
+                                    className="text-red-600 hover:text-red-800"
+                                    title="Delete Customer"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           );
@@ -909,7 +1040,7 @@
                         <h3 className="font-semibold">{stage.name}</h3>
                         <p className="text-sm opacity-90">
                           {opportunities.filter(o => o.stage === stage.id).length} deals • 
-                          ${(opportunities.filter(o => o.stage === stage.id).reduce((sum, o) => sum + o.value, 0) / 1000).toFixed(0)}K
+                          ${(opportunities.filter(o => o.stage === stage.id).reduce((sum, o) => sum + (o.value || 0), 0) / 1000).toFixed(0)}K
                         </p>
                       </div>
                       
@@ -934,7 +1065,7 @@
                                   {customer?.name}
                                 </p>
                                 <div className="flex justify-between items-center mt-3">
-                                  <span className="text-lg font-semibold">${(opp.value / 1000).toFixed(0)}K</span>
+                                  <span className="text-lg font-semibold">${((opp.value || 0) / 1000).toFixed(0)}K</span>
                                   <span className="text-sm text-gray-500">{opp.salesRep}</span>
                                 </div>
                                 <div className="mt-2 text-xs text-gray-500">
@@ -1064,12 +1195,36 @@
               </div>
         
               <div className="bg-white rounded-lg shadow p-6">
-                <p className="text-gray-400">No quotes yet</p>
+                {quotes.length === 0 ? (
+                  <p className="text-gray-400">No quotes yet</p>
+                ) : (
+                  <div className="space-y-3">
+                    {quotes.map(quote => (
+                      <div key={quote.id} className="p-4 border rounded-lg">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="font-semibold">{quote.quoteNumber}</h4>
+                            <p className="text-sm text-gray-600">
+                              {customers.find(c => c.id === quote.customerId)?.name}
+                            </p>
+                          </div>
+                          <span className={`px-2 py-1 text-xs rounded-full ${
+                            quote.status === 'sent' ? 'bg-blue-100 text-blue-800' :
+                            quote.status === 'accepted' ? 'bg-green-100 text-green-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {quote.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           );
         
-          // Activities View with more complete functionality
+          // Activities View
           const Activities = () => {
             const today = new Date().toISOString().split('T')[0];
             
@@ -1523,9 +1678,9 @@
               </div>
             );
           };
-        
-          // Modal Component - moved outside to prevent re-creation
-          const Modal = React.memo(({ 
+
+          // Modal Component
+          const Modal = ({ 
             showModal, 
             formData, 
             setFormData, 
@@ -1534,34 +1689,44 @@
             opportunities, 
             customerStages, 
             handleAddCustomer, 
+            handleUpdateCustomer,
+            handleDeleteCustomer,
             handleAddOpportunity, 
             handleAddQuote, 
-            handleAddActivity 
+            handleAddActivity,
+            editingCustomer,
+            setEditingCustomer
           }) => {
             if (!showModal) return null;
 
-            const updateField = useCallback((field, value) => {
+            const updateField = (field, value) => {
               setFormData(prev => ({ ...prev, [field]: value }));
-            }, [setFormData]);
+            };
 
-            const handleClose = useCallback(() => {
+            const handleClose = () => {
               setShowModal(null);
               setFormData({});
-            }, [setShowModal, setFormData]);
+              setEditingCustomer(null);
+            };
 
-            const handleSubmit = useCallback(() => {
-              if (showModal === 'customer') handleAddCustomer();
-              else if (showModal === 'opportunity') handleAddOpportunity();
+            const handleSubmit = () => {
+              if (showModal === 'customer') {
+                if (editingCustomer) {
+                  handleUpdateCustomer();
+                } else {
+                  handleAddCustomer();
+                }
+              } else if (showModal === 'opportunity') handleAddOpportunity();
               else if (showModal === 'quote') handleAddQuote();
               else if (showModal === 'activity') handleAddActivity();
-            }, [showModal, handleAddCustomer, handleAddOpportunity, handleAddQuote, handleAddActivity]);
+            };
         
             return (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowModal(null)}>
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={handleClose}>
                 <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 m-4" onClick={(e) => e.stopPropagation()}>
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-xl font-semibold">
-                      Add {showModal === 'customer' ? 'Customer' : showModal === 'opportunity' ? 'Opportunity' : showModal === 'quote' ? 'Quote' : 'Activity'}
+                      {editingCustomer ? 'Edit' : 'Add'} {showModal === 'customer' ? 'Customer' : showModal === 'opportunity' ? 'Opportunity' : showModal === 'quote' ? 'Quote' : 'Activity'}
                     </h3>
                     <button onClick={handleClose} className="text-gray-500 hover:text-gray-700">
                       <X size={24} />
@@ -1680,7 +1845,19 @@
                     )}
         
                     {showModal === 'quote' && (
-                      <p className="text-gray-500">Quote form coming soon...</p>
+                      <>
+                        <p className="text-gray-500">Quote form coming soon...</p>
+                        <select
+                          className="w-full p-2 border rounded"
+                          value={formData.customerId || ''}
+                          onChange={(e) => updateField('customerId', e.target.value)}
+                        >
+                          <option value="">Select Customer</option>
+                          {customers.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </>
                     )}
         
                     {showModal === 'activity' && (
@@ -1773,13 +1950,13 @@
                       onClick={handleSubmit}
                       className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                     >
-                      Save
+                      {editingCustomer && showModal === 'customer' ? 'Update' : 'Save'}
                     </button>
                   </div>
                 </div>
               </div>
             );
-          });
+          };
 
           // Follow-up Modal Component
           const FollowUpModal = ({ activity, customers, customerStages, onClose, onCreate }) => {
@@ -1974,16 +2151,29 @@
             );
           };
 
+          const renderActiveView = () => {
+            switch(activeView) {
+              case 'dashboard':
+                return <Dashboard />;
+              case 'customers':
+                return <Customers />;
+              case 'pipeline':
+                return <Pipeline />;
+              case 'quotes':
+                return <Quotes />;
+              case 'activities':
+                return <Activities />;
+              default:
+                return <Dashboard />;
+            }
+          };
+
           return (
             <div className="flex min-h-screen bg-gray-100">
               <Navigation />
               
               <div className="flex-1 overflow-y-auto">
-                {activeView === 'dashboard' && <Dashboard />}
-                {activeView === 'customers' && <Customers />}
-                {activeView === 'pipeline' && <Pipeline />}
-                {activeView === 'quotes' && <Quotes />}
-                {activeView === 'activities' && <Activities />}
+                {renderActiveView()}
               </div>
 
               <Modal 
@@ -1995,9 +2185,13 @@
                 opportunities={opportunities}
                 customerStages={customerStages}
                 handleAddCustomer={handleAddCustomer}
+                handleUpdateCustomer={handleUpdateCustomer}
+                handleDeleteCustomer={handleDeleteCustomer}
                 handleAddOpportunity={handleAddOpportunity}
                 handleAddQuote={handleAddQuote}
                 handleAddActivity={handleAddActivity}
+                editingCustomer={editingCustomer}
+                setEditingCustomer={setEditingCustomer}
               />
             </div>
           );
