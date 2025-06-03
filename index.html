@@ -191,6 +191,64 @@
           messagingSenderId: "321138365753",
           appId: "1:321138365753:web:866da9cdc5a300219944e8"
         };
+
+        // Industries list from CSV
+        const INDUSTRIES = [
+          "Access Flooring",
+          "Agriculture",
+          "Association / Trade Group",
+          "Automotive",
+          "Basement Columns",
+          "Carport / Metal Buildings",
+          "Carports",
+          "Chair Lifts",
+          "Containers (IBC)",
+          "Conveyor",
+          "DOT Manufacturing",
+          "Defense Contractor",
+          "Distributor",
+          "Engineered Cabs",
+          "Equipment",
+          "Fabric Structures / Hoop Buildings",
+          "Fabrication",
+          "Fans & Fans Racks Manufacturing",
+          "Fencing",
+          "Fitness Equipment",
+          "Furniture",
+          "Highway",
+          "Highway, Rail",
+          "ISO Intermodal Containers",
+          "Ladder",
+          "Lawn & Garden",
+          "Manufacturer",
+          "Metal Buildings",
+          "Metal Buildings / Carports",
+          "Metal Stamping",
+          "Mezzanines",
+          "Mobile Housing",
+          "RV",
+          "Racking - Automotive",
+          "Racking - Computer Servers",
+          "Racking - Servers",
+          "Racking / Storage",
+          "Racks",
+          "Roll Former",
+          "Roll Off / Dumpster",
+          "Rollforming",
+          "Scaffolding",
+          "Service center",
+          "Signpost",
+          "Solar",
+          "Steel buildings",
+          "Storage / Racking",
+          "Structural Steel Fabrication",
+          "Tension Fabric Buildings",
+          "Tire Racks",
+          "Trailers",
+          "Truck Equipment",
+          "Tubular Wire Carriers",
+          "Other"
+        ];
         
         const MajorMetalsCRM = () => {
           // State
@@ -210,6 +268,7 @@
           const [firebaseDb, setFirebaseDb] = useState(null);
           const [isFirebaseConfigured, setIsFirebaseConfigured] = useState(false);
           const [editingCustomer, setEditingCustomer] = useState(null);
+          const [industryFilter, setIndustryFilter] = useState('all');
         
           // Customer Pipeline Stages
           const customerStages = [
@@ -358,11 +417,23 @@
                 {
                   id: '1',
                   name: 'Apex Construction Inc.',
+                  industry: 'Metal Buildings',
                   contact: 'John Davidson',
                   email: 'john@apexconstruction.com',
                   phone: '(555) 123-4567',
                   status: 'active',
                   pipelineStage: 'quote_out',
+                  lastActivity: new Date().toISOString()
+                },
+                {
+                  id: '2',
+                  name: 'Tech Innovations Corp',
+                  industry: 'Technology Manufacturing',
+                  contact: 'Sarah Chen',
+                  email: 'sarah@techinnovations.com',
+                  phone: '(555) 987-6543',
+                  status: 'active',
+                  pipelineStage: 'lead',
                   lastActivity: new Date().toISOString()
                 }
               ];
@@ -390,6 +461,18 @@
                   time: '10:00 AM',
                   notes: 'Sent detailed quote with volume pricing',
                   completed: true,
+                  pipelineStage: 'quote_out',
+                  followUpCreated: false
+                },
+                {
+                  id: '2',
+                  customerId: '1',
+                  type: 'call',
+                  subject: 'Follow up with Apex Construction Inc.',
+                  date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                  time: '2:00 PM',
+                  notes: 'Scheduled from customer tab - discuss pricing and delivery timeline',
+                  completed: false,
                   pipelineStage: 'quote_out',
                   followUpCreated: false
                 }
@@ -426,10 +509,15 @@
             const newCustomer = {
               id: Date.now().toString(),
               ...formData,
+              // If industry is "Other", use customIndustry value, otherwise use the selected industry
+              industry: formData.industry === 'Other' ? (formData.customIndustry || 'Other') : formData.industry,
               status: formData.status || 'prospect',
               pipelineStage: formData.pipelineStage || 'lead',
               createdAt: new Date().toISOString()
             };
+            
+            // Remove customIndustry from the saved data to keep it clean
+            delete newCustomer.customIndustry;
             
             const updatedCustomers = [...customers, newCustomer];
             setCustomers(updatedCustomers);
@@ -452,9 +540,18 @@
           };
 
           const handleUpdateCustomer = () => {
+            const updatedData = {
+              ...formData,
+              // If industry is "Other", use customIndustry value, otherwise use the selected industry
+              industry: formData.industry === 'Other' ? (formData.customIndustry || 'Other') : formData.industry
+            };
+            
+            // Remove customIndustry from the saved data to keep it clean
+            delete updatedData.customIndustry;
+            
             const updatedCustomers = customers.map(c => 
               c.id === editingCustomer.id 
-                ? { ...editingCustomer, ...formData, updatedAt: new Date().toISOString() }
+                ? { ...editingCustomer, ...updatedData, updatedAt: new Date().toISOString() }
                 : c
             );
             setCustomers(updatedCustomers);
@@ -743,6 +840,7 @@
                       setShowModal(null);
                       setFormData({});
                       setEditingCustomer(null);
+                      setIndustryFilter('all');
                     }}
                     className={`w-full flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors ${
                       activeView === item.id ? 'bg-blue-600' : 'hover:bg-gray-800'
@@ -892,54 +990,132 @@
           );
         
           // Customers View
-          const Customers = () => (
-            <div className="p-8">
-              <div className="flex justify-between items-center mb-8">
-                <h2 className="text-3xl font-bold">Customers</h2>
-                <button
-                  onClick={() => {
-                    setEditingCustomer(null);
-                    setFormData({});
-                    setShowModal('customer');
-                  }}
-                  className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-                >
-                  <Plus size={20} />
-                  <span>Add Customer</span>
-                </button>
-              </div>
-        
-              <div className="bg-white rounded-lg shadow">
-                <div className="p-4 border-b">
-                  <input
-                    type="text"
-                    placeholder="Search customers..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full outline-none"
-                  />
+          const Customers = () => {
+            // Helper to check if industry is custom (not in predefined list)
+            const isCustomIndustry = (industry) => {
+              return industry && !INDUSTRIES.slice(0, -1).includes(industry);
+            };
+
+            // Get unique industries from customers with counts
+            const getIndustryStats = () => {
+              const stats = {};
+              customers.forEach(customer => {
+                if (customer.industry) {
+                  // Group custom industries as "Other"
+                  const industryKey = isCustomIndustry(customer.industry) ? 'Other' : customer.industry;
+                  stats[industryKey] = (stats[industryKey] || 0) + 1;
+                } else {
+                  stats['No Industry'] = (stats['No Industry'] || 0) + 1;
+                }
+              });
+              // Sort by count (descending) then alphabetically
+              return Object.entries(stats)
+                .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+                .map(([industry, count]) => ({ industry, count }));
+            };
+
+            const industryStats = getIndustryStats();
+
+            // Filter customers based on search and industry
+            const filteredCustomers = customers.filter(c => {
+              const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase());
+              let matchesIndustry;
+              
+              if (industryFilter === 'all') {
+                matchesIndustry = true;
+              } else if (industryFilter === 'Other') {
+                // Show customers with custom industries
+                matchesIndustry = isCustomIndustry(c.industry);
+              } else if (industryFilter === 'No Industry') {
+                // Show customers without industry
+                matchesIndustry = !c.industry;
+              } else {
+                matchesIndustry = c.industry === industryFilter;
+              }
+              
+              return matchesSearch && matchesIndustry;
+            });
+
+            const scheduleActivityForCustomer = (customer) => {
+              setFormData({
+                customerId: customer.id,
+                type: 'call',
+                subject: `Follow up with ${customer.name}`,
+                date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Tomorrow
+                time: '10:00 AM',
+                notes: '',
+                pipelineStage: customer.pipelineStage || 'lead'
+              });
+              setShowModal('activity');
+            };
+
+            return (
+              <div className="p-8">
+                <div className="flex justify-between items-center mb-8">
+                  <h2 className="text-3xl font-bold">Customers</h2>
+                  <button
+                    onClick={() => {
+                      setEditingCustomer(null);
+                      setFormData({});
+                      setShowModal('customer');
+                    }}
+                    className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                  >
+                    <Plus size={20} />
+                    <span>Add Customer</span>
+                  </button>
                 </div>
-                
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gray-50 border-b">
-                      <tr>
-                        <th className="text-left p-4">Company</th>
-                        <th className="text-left p-4">Contact</th>
-                        <th className="text-left p-4">Email</th>
-                        <th className="text-left p-4">Phone</th>
-                        <th className="text-left p-4">Status</th>
-                        <th className="text-left p-4">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {customers
-                        .filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()))
-                        .map(customer => {
+          
+                <div className="bg-white rounded-lg shadow">
+                  <div className="p-4 border-b">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4 flex-1">
+                        <input
+                          type="text"
+                          placeholder="Search customers..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="flex-1 outline-none"
+                        />
+                        <select
+                          value={industryFilter}
+                          onChange={(e) => setIndustryFilter(e.target.value)}
+                          className="px-4 py-2 border rounded-lg"
+                        >
+                          <option value="all">All Industries ({customers.length})</option>
+                          {industryStats.map(({ industry, count }) => (
+                            <option key={industry} value={industry}>
+                              {industry} ({count})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="ml-4 text-sm text-gray-600">
+                        Showing {filteredCustomers.length} of {customers.length} customers
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50 border-b">
+                        <tr>
+                          <th className="text-left p-4">Company</th>
+                          <th className="text-left p-4">Industry</th>
+                          <th className="text-left p-4">Contact</th>
+                          <th className="text-left p-4">Email</th>
+                          <th className="text-left p-4">Phone</th>
+                          <th className="text-left p-4">Status</th>
+                          <th className="text-left p-4">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredCustomers.map(customer => {
                           const stage = customerStages.find(s => s.id === customer.pipelineStage);
                           return (
                             <tr key={customer.id} className="border-b hover:bg-gray-50">
                               <td className="p-4">{customer.name}</td>
+                              <td className="p-4 text-sm text-gray-600">{customer.industry || '-'}</td>
                               <td className="p-4">{customer.contact}</td>
                               <td className="p-4">{customer.email}</td>
                               <td className="p-4">{customer.phone}</td>
@@ -958,10 +1134,21 @@
                               <td className="p-4">
                                 <div className="flex items-center space-x-2">
                                   <button
+                                    onClick={() => scheduleActivityForCustomer(customer)}
+                                    className="text-purple-600 hover:text-purple-800"
+                                    title="Schedule Activity"
+                                  >
+                                    <Calendar size={16} />
+                                  </button>
+                                  <button
                                     onClick={() => {
                                       setEditingCustomer(customer);
+                                      // Check if the customer's industry is in the predefined list
+                                      const isCustomIndustry = customer.industry && !INDUSTRIES.includes(customer.industry);
                                       setFormData({
                                         name: customer.name,
+                                        industry: isCustomIndustry ? 'Other' : customer.industry || '',
+                                        customIndustry: isCustomIndustry ? customer.industry : '',
                                         contact: customer.contact,
                                         email: customer.email,
                                         phone: customer.phone,
@@ -986,12 +1173,18 @@
                             </tr>
                           );
                         })}
-                    </tbody>
-                  </table>
+                      </tbody>
+                    </table>
+                    {filteredCustomers.length === 0 && (
+                      <div className="p-8 text-center text-gray-500">
+                        No customers found matching your criteria
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          );
+            );
+          };
         
           // Pipeline View
           const Pipeline = () => {
@@ -1746,6 +1939,34 @@
                             autoFocus
                           />
                         </div>
+                        <div key="industry-field">
+                          <select
+                            className="w-full p-2 border rounded"
+                            value={formData.industry || ''}
+                            onChange={(e) => {
+                              updateField('industry', e.target.value);
+                              if (e.target.value !== 'Other') {
+                                updateField('customIndustry', '');
+                              }
+                            }}
+                          >
+                            <option value="">Select Industry</option>
+                            {INDUSTRIES.map(industry => (
+                              <option key={industry} value={industry}>{industry}</option>
+                            ))}
+                          </select>
+                        </div>
+                        {formData.industry === 'Other' && (
+                          <div key="custom-industry-field">
+                            <input
+                              type="text"
+                              placeholder="Enter custom industry"
+                              className="w-full p-2 border rounded"
+                              value={formData.customIndustry || ''}
+                              onChange={(e) => updateField('customIndustry', e.target.value)}
+                            />
+                          </div>
+                        )}
                         <div key="contact-field">
                           <input
                             type="text"
