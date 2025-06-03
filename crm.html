@@ -1,0 +1,1806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Major Metals CRM</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        Import React, { useState, useEffect } from 'react';
+        import { Search, Plus, Phone, Mail, Calendar, FileText, BarChart3, Users, Package, DollarSign, TrendingUp, Eye, Edit2, Trash2, Check, X, Clock, AlertCircle, Cloud, CloudOff, RefreshCw } from 'lucide-react';
+        
+        const FIREBASE_CONFIG = {
+          apiKey: "AIzaSyCKIKzPH6ibixe7rnq0em4AAsdq5b10WDA",
+          authDomain: "crm-mm-7bdfb.firebaseapp.com",
+          databaseURL: "https://crm-mm-7bdfb-default-rtdb.firebaseio.com",
+          projectId: "crm-mm-7bdfb",
+          storageBucket: "crm-mm-7bdfb.firebasestorage.app",
+          messagingSenderId: "321138365753",
+          appId: "1:321138365753:web:866da9cdc5a300219944e8"
+        };
+        
+        const MajorMetalsCRM = () => {
+          // State
+          const [activeView, setActiveView] = useState('dashboard');
+          const [customers, setCustomers] = useState([]);
+          const [opportunities, setOpportunities] = useState([]);
+          const [quotes, setQuotes] = useState([]);
+          const [activities, setActivities] = useState([]);
+          const [showModal, setShowModal] = useState(null);
+          const [formData, setFormData] = useState({});
+          const [searchTerm, setSearchTerm] = useState('');
+          const [activityFilter, setActivityFilter] = useState('all');
+          const [showFollowUp, setShowFollowUp] = useState(null);
+          const [isOnline, setIsOnline] = useState(true);
+          const [isSyncing, setIsSyncing] = useState(false);
+          const [lastSync, setLastSync] = useState(null);
+          const [firebaseDb, setFirebaseDb] = useState(null);
+          const [isFirebaseConfigured, setIsFirebaseConfigured] = useState(false);
+        
+          // Customer Pipeline Stages
+          const customerStages = [
+            { id: 'lead', name: 'Lead', color: 'bg-gray-500' },
+            { id: 'qualified', name: 'Qualified', color: 'bg-blue-500' },
+            { id: 'quote_out', name: 'Quote Out', color: 'bg-purple-500' },
+            { id: 'negotiating', name: 'Negotiating', color: 'bg-yellow-500' },
+            { id: 'po_pending', name: 'PO Pending', color: 'bg-orange-500' },
+            { id: 'po_received', name: 'PO Received', color: 'bg-green-500' },
+            { id: 'fulfillment', name: 'In Fulfillment', color: 'bg-indigo-500' },
+            { id: 'delivered', name: 'Delivered', color: 'bg-teal-500' }
+          ];
+        
+          // Initialize Firebase
+          useEffect(() => {
+            // Check if Firebase config is provided
+            if (FIREBASE_CONFIG.apiKey !== "YOUR-API-KEY") {
+              setIsFirebaseConfigured(true);
+              
+              // Load Firebase scripts dynamically
+              const loadFirebase = async () => {
+                try {
+                  // Load Firebase app
+                  const appScript = document.createElement('script');
+                  appScript.src = 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js';
+                  document.head.appendChild(appScript);
+                  
+                  // Load Firebase database
+                  const dbScript = document.createElement('script');
+                  dbScript.src = 'https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js';
+                  document.head.appendChild(dbScript);
+                  
+                  // Wait for scripts to load
+                  await new Promise(resolve => {
+                    dbScript.onload = resolve;
+                  });
+                  
+                  // Initialize Firebase
+                  if (window.firebase) {
+                    window.firebase.initializeApp(FIREBASE_CONFIG);
+                    const db = window.firebase.database();
+                    setFirebaseDb(db);
+                    
+                    // Set up real-time listeners
+                    setupFirebaseListeners(db);
+                  }
+                } catch (error) {
+                  console.error('Error loading Firebase:', error);
+                  setIsFirebaseConfigured(false);
+                }
+              };
+              
+              loadFirebase();
+            } else {
+              // No Firebase config - use localStorage
+              loadFromLocalStorage();
+            }
+            
+            // Monitor online status
+            window.addEventListener('online', () => setIsOnline(true));
+            window.addEventListener('offline', () => setIsOnline(false));
+            
+            return () => {
+              window.removeEventListener('online', () => setIsOnline(true));
+              window.removeEventListener('offline', () => setIsOnline(false));
+            };
+          }, []);
+        
+          // Set up Firebase real-time listeners
+          const setupFirebaseListeners = (db) => {
+            // Customers listener
+            db.ref('customers').on('value', (snapshot) => {
+              const data = snapshot.val();
+              if (data) {
+                const customerArray = Object.entries(data).map(([id, customer]) => ({
+                  ...customer,
+                  id: id
+                }));
+                setCustomers(customerArray);
+                localStorage.setItem('customers', JSON.stringify(customerArray));
+              }
+            });
+        
+            // Opportunities listener
+            db.ref('opportunities').on('value', (snapshot) => {
+              const data = snapshot.val();
+              if (data) {
+                const oppArray = Object.entries(data).map(([id, opp]) => ({
+                  ...opp,
+                  id: id
+                }));
+                setOpportunities(oppArray);
+                localStorage.setItem('opportunities', JSON.stringify(oppArray));
+              }
+            });
+        
+            // Activities listener
+            db.ref('activities').on('value', (snapshot) => {
+              const data = snapshot.val();
+              if (data) {
+                const actArray = Object.entries(data).map(([id, act]) => ({
+                  ...act,
+                  id: id
+                }));
+                setActivities(actArray);
+                localStorage.setItem('activities', JSON.stringify(actArray));
+              }
+            });
+        
+            // Quotes listener
+            db.ref('quotes').on('value', (snapshot) => {
+              const data = snapshot.val();
+              if (data) {
+                const quoteArray = Object.entries(data).map(([id, quote]) => ({
+                  ...quote,
+                  id: id
+                }));
+                setQuotes(quoteArray);
+                localStorage.setItem('quotes', JSON.stringify(quoteArray));
+              }
+            });
+        
+            setLastSync(new Date().toISOString());
+          };
+        
+          // Load from localStorage (fallback when offline or no Firebase)
+          const loadFromLocalStorage = () => {
+            const loadedCustomers = JSON.parse(localStorage.getItem('customers') || '[]');
+            const loadedOpportunities = JSON.parse(localStorage.getItem('opportunities') || '[]');
+            const loadedQuotes = JSON.parse(localStorage.getItem('quotes') || '[]');
+            const loadedActivities = JSON.parse(localStorage.getItem('activities') || '[]');
+        
+            if (loadedCustomers.length === 0) {
+              // Initialize with sample data only if no data exists
+              const sampleCustomers = [
+                {
+                  id: '1',
+                  name: 'Apex Construction Inc.',
+                  contact: 'John Davidson',
+                  email: 'john@apexconstruction.com',
+                  phone: '(555) 123-4567',
+                  status: 'active',
+                  pipelineStage: 'quote_out',
+                  lastActivity: new Date().toISOString()
+                }
+              ];
+              
+              const sampleOpportunities = [
+                {
+                  id: '1',
+                  customerId: '1',
+                  title: 'Q1 2025 Bulk Order',
+                  value: 125000,
+                  stage: 'negotiation',
+                  salesRep: 'Kaleb Smith',
+                  createdAt: new Date().toISOString(),
+                  lastActivity: null
+                }
+              ];
+              
+              const sampleActivities = [
+                {
+                  id: '1',
+                  customerId: '1',
+                  type: 'email',
+                  subject: 'Quote sent for Q1 order',
+                  date: new Date().toISOString().split('T')[0],
+                  time: '10:00 AM',
+                  notes: 'Sent detailed quote with volume pricing',
+                  completed: true,
+                  pipelineStage: 'quote_out',
+                  followUpCreated: false
+                }
+              ];
+              
+              setCustomers(sampleCustomers);
+              setOpportunities(sampleOpportunities);
+              setActivities(sampleActivities);
+            } else {
+              setCustomers(loadedCustomers);
+              setOpportunities(loadedOpportunities);
+              setQuotes(loadedQuotes);
+              setActivities(loadedActivities);
+            }
+          };
+        
+          // Save to Firebase
+          const saveToFirebase = async (path, data) => {
+            if (firebaseDb && isOnline) {
+              try {
+                setIsSyncing(true);
+                await firebaseDb.ref(path).set(data);
+                setLastSync(new Date().toISOString());
+              } catch (error) {
+                console.error('Error saving to Firebase:', error);
+              } finally {
+                setIsSyncing(false);
+              }
+            }
+          };
+        
+          // Update handlers to save to both localStorage and Firebase
+          const handleAddCustomer = () => {
+            const newCustomer = {
+              id: Date.now().toString(),
+              ...formData,
+              status: formData.status || 'prospect',
+              pipelineStage: formData.pipelineStage || 'lead',
+              createdAt: new Date().toISOString()
+            };
+            
+            const updatedCustomers = [...customers, newCustomer];
+            setCustomers(updatedCustomers);
+            
+            // Save to localStorage
+            localStorage.setItem('customers', JSON.stringify(updatedCustomers));
+            
+            // Save to Firebase
+            if (firebaseDb) {
+              const customersObj = {};
+              updatedCustomers.forEach(c => {
+                customersObj[c.id] = c;
+              });
+              saveToFirebase('customers', customersObj);
+            }
+            
+            setShowModal(null);
+            setFormData({});
+          };
+        
+          const handleAddOpportunity = () => {
+            const newOpportunity = {
+              id: Date.now().toString(),
+              ...formData,
+              stage: 'new',
+              salesRep: 'Kaleb Smith',
+              createdAt: new Date().toISOString(),
+              lastActivity: null
+            };
+            
+            const updatedOpportunities = [...opportunities, newOpportunity];
+            setOpportunities(updatedOpportunities);
+            
+            // Save to localStorage
+            localStorage.setItem('opportunities', JSON.stringify(updatedOpportunities));
+            
+            // Save to Firebase
+            if (firebaseDb) {
+              const oppsObj = {};
+              updatedOpportunities.forEach(o => {
+                oppsObj[o.id] = o;
+              });
+              saveToFirebase('opportunities', oppsObj);
+            }
+            
+            // Update customer pipeline stage if creating opportunity
+            if (formData.customerId) {
+              const updatedCustomers = customers.map(c => 
+                c.id === formData.customerId 
+                  ? {...c, pipelineStage: 'qualified'} 
+                  : c
+              );
+              setCustomers(updatedCustomers);
+              localStorage.setItem('customers', JSON.stringify(updatedCustomers));
+              
+              if (firebaseDb) {
+                const customersObj = {};
+                updatedCustomers.forEach(c => {
+                  customersObj[c.id] = c;
+                });
+                saveToFirebase('customers', customersObj);
+              }
+            }
+            
+            // Create initial activity if requested
+            if (formData.createActivity) {
+              const newActivity = {
+                id: (Date.now() + 1).toString(),
+                customerId: formData.customerId,
+                opportunityId: newOpportunity.id,
+                type: 'call',
+                subject: `Initial discussion: `,
+                date: formData.activityDate || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                time: '10:00 AM',
+                notes: `Follow up on new opportunity: `,
+                completed: false,
+                pipelineStage: 'qualified'
+              };
+              
+              const updatedActivities = [...activities, newActivity];
+              setActivities(updatedActivities);
+              localStorage.setItem('activities', JSON.stringify(updatedActivities));
+              
+              if (firebaseDb) {
+                const actsObj = {};
+                updatedActivities.forEach(a => {
+                  actsObj[a.id] = a;
+                });
+                saveToFirebase('activities', actsObj);
+              }
+            }
+            
+            setShowModal(null);
+            setFormData({});
+          };
+        
+          const handleAddQuote = () => {
+            const newQuote = {
+              id: Date.now().toString(),
+              quoteNumber: `Q--`,
+              ...formData,
+              status: 'draft',
+              createdAt: new Date().toISOString()
+            };
+            
+            const updatedQuotes = [...quotes, newQuote];
+            setQuotes(updatedQuotes);
+            
+            // Save to localStorage
+            localStorage.setItem('quotes', JSON.stringify(updatedQuotes));
+            
+            // Save to Firebase
+            if (firebaseDb) {
+              const quotesObj = {};
+              updatedQuotes.forEach(q => {
+                quotesObj[q.id] = q;
+              });
+              saveToFirebase('quotes', quotesObj);
+            }
+            
+            setShowModal(null);
+            setFormData({});
+          };
+        
+          const handleAddActivity = () => {
+            const newActivity = {
+              id: Date.now().toString(),
+              ...formData,
+              completed: false,
+              followUpCreated: false,
+              pipelineStage: formData.pipelineStage || customers.find(c => c.id === formData.customerId)?.pipelineStage || 'lead'
+            };
+            
+            const updatedActivities = [...activities, newActivity];
+            setActivities(updatedActivities);
+            
+            // Save to localStorage
+            localStorage.setItem('activities', JSON.stringify(updatedActivities));
+            
+            // Save to Firebase
+            if (firebaseDb) {
+              const actsObj = {};
+              updatedActivities.forEach(a => {
+                actsObj[a.id] = a;
+              });
+              saveToFirebase('activities', actsObj);
+            }
+            
+            // Update customer's pipeline stage if provided
+            if (formData.pipelineStage && formData.customerId) {
+              const updatedCustomers = customers.map(c => 
+                c.id === formData.customerId 
+                  ? {...c, pipelineStage: formData.pipelineStage, lastActivity: new Date().toISOString()} 
+                  : c
+              );
+              setCustomers(updatedCustomers);
+              localStorage.setItem('customers', JSON.stringify(updatedCustomers));
+              
+              if (firebaseDb) {
+                const customersObj = {};
+                updatedCustomers.forEach(c => {
+                  customersObj[c.id] = c;
+                });
+                saveToFirebase('customers', customersObj);
+              }
+            }
+            
+            // Update opportunity's last activity if linked
+            if (formData.opportunityId) {
+              const updatedOpportunities = opportunities.map(o => 
+                o.id === formData.opportunityId 
+                  ? {...o, lastActivity: new Date().toISOString(), lastActivitySubject: formData.subject} 
+                  : o
+              );
+              setOpportunities(updatedOpportunities);
+              localStorage.setItem('opportunities', JSON.stringify(updatedOpportunities));
+              
+              if (firebaseDb) {
+                const oppsObj = {};
+                updatedOpportunities.forEach(o => {
+                  oppsObj[o.id] = o;
+                });
+                saveToFirebase('opportunities', oppsObj);
+              }
+            }
+            
+            setShowModal(null);
+            setFormData({});
+          };
+        
+          const handleDragStart = (e, oppId) => {
+            e.dataTransfer.setData('opportunityId', oppId);
+          };
+        
+          const handleDrop = (e, newStage) => {
+            e.preventDefault();
+            const oppId = e.dataTransfer.getData('opportunityId');
+            const updatedOpportunities = opportunities.map(o => o.id === oppId ? {...o, stage: newStage} : o);
+            setOpportunities(updatedOpportunities);
+            
+            // Save to localStorage
+            localStorage.setItem('opportunities', JSON.stringify(updatedOpportunities));
+            
+            // Save to Firebase
+            if (firebaseDb) {
+              const oppsObj = {};
+              updatedOpportunities.forEach(o => {
+                oppsObj[o.id] = o;
+              });
+              saveToFirebase('opportunities', oppsObj);
+            }
+          };
+        
+          // Pipeline stages
+          const pipelineStages = [
+            { id: 'new', name: 'New Lead', color: 'bg-gray-500' },
+            { id: 'qualified', name: 'Qualified', color: 'bg-blue-500' },
+            { id: 'quoted', name: 'Quoted', color: 'bg-purple-500' },
+            { id: 'negotiation', name: 'Negotiation', color: 'bg-yellow-500' },
+            { id: 'won', name: 'Won', color: 'bg-green-500' },
+            { id: 'lost', name: 'Lost', color: 'bg-red-500' }
+          ];
+        
+          // Metrics calculation
+          const metrics = {
+            openOpportunities: opportunities.filter(o => o.stage !== 'won' && o.stage !== 'lost').length,
+            totalPipeline: opportunities.filter(o => o.stage !== 'won' && o.stage !== 'lost').reduce((sum, o) => sum + o.value, 0),
+            wonDeals: opportunities.filter(o => o.stage === 'won').reduce((sum, o) => sum + o.value, 0),
+            activeCustomers: customers.filter(c => c.status === 'active').length
+          };
+        
+          // Navigation
+          const Navigation = () => (
+            <div className="bg-gray-900 text-white w-64 min-h-screen p-4 flex flex-col">
+              <div className="mb-8">
+                <h1 className="text-2xl font-bold">Major Metals CRM</h1>
+                <p className="text-gray-400 text-sm">Steel Tubing Solutions</p>
+              </div>
+              
+              <nav className="space-y-2 flex-1">
+                {[
+                  { id: 'dashboard', icon: BarChart3, label: 'Dashboard' },
+                  { id: 'customers', icon: Users, label: 'Customers' },
+                  { id: 'pipeline', icon: TrendingUp, label: 'Sales Pipeline' },
+                  { id: 'quotes', icon: FileText, label: 'Quotes' },
+                  { id: 'activities', icon: Calendar, label: 'Activities' }
+                ].map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveView(item.id)}
+                    className={`w-full flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors ${
+                      activeView === item.id ? 'bg-blue-600' : 'hover:bg-gray-800'
+                    }`}
+                  >
+                    <item.icon size={20} />
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </nav>
+              
+              <div className="mt-8 pt-8 border-t border-gray-800">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    {isOnline ? (
+                      <Cloud size={16} className="text-green-500" />
+                    ) : (
+                      <CloudOff size={16} className="text-red-500" />
+                    )}
+                    <span className="text-xs text-gray-400">
+                      {isOnline ? 'Online' : 'Offline'}
+                    </span>
+                  </div>
+                  {isSyncing && (
+                    <RefreshCw size={16} className="text-blue-500 animate-spin" />
+                  )}
+                </div>
+                {lastSync && (
+                  <p className="text-xs text-gray-500">
+                    Last sync: {new Date(lastSync).toLocaleTimeString()}
+                  </p>
+                )}
+                {!isFirebaseConfigured && (
+                  <p className="text-xs text-yellow-500 mt-2">
+                    Local storage only
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        
+          // Dashboard
+          const Dashboard = () => (
+            <div className="p-8">
+              <h2 className="text-3xl font-bold mb-8">Sales Dashboard</h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div className="bg-white rounded-lg shadow p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <Package className="text-blue-500" size={24} />
+                    <span className="text-sm text-gray-500">Open Opportunities</span>
+                  </div>
+                  <p className="text-2xl font-bold">{metrics.openOpportunities}</p>
+                  <p className="text-sm text-gray-600">${(metrics.totalPipeline / 1000).toFixed(0)}K in pipeline</p>
+                </div>
+                
+                <div className="bg-white rounded-lg shadow p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <DollarSign className="text-green-500" size={24} />
+                    <span className="text-sm text-gray-500">Won Deals</span>
+                  </div>
+                  <p className="text-2xl font-bold">${(metrics.wonDeals / 1000).toFixed(0)}K</p>
+                </div>
+                
+                <div className="bg-white rounded-lg shadow p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <TrendingUp className="text-purple-500" size={24} />
+                    <span className="text-sm text-gray-500">Win Rate</span>
+                  </div>
+                  <p className="text-2xl font-bold">0%</p>
+                </div>
+                
+                <div className="bg-white rounded-lg shadow p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <Users className="text-orange-500" size={24} />
+                    <span className="text-sm text-gray-500">Active Customers</span>
+                  </div>
+                  <p className="text-2xl font-bold">{metrics.activeCustomers}</p>
+                </div>
+              </div>
+        
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h3 className="text-xl font-semibold mb-4">Recent Activities</h3>
+                  {activities.length === 0 ? (
+                    <p className="text-gray-400">No activities yet</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {activities
+                        .sort((a, b) => new Date(b.date) - new Date(a.date))
+                        .slice(0, 5)
+                        .map(activity => (
+                          <div key={activity.id} className="flex items-center justify-between p-3 bg-gray-50 rounded">
+                            <div className="flex items-center space-x-3">
+                              {activity.type === 'call' ? <Phone size={16} /> : 
+                               activity.type === 'email' ? <Mail size={16} /> : 
+                               <Calendar size={16} />}
+                              <div>
+                                <p className="font-medium text-sm">{activity.subject}</p>
+                                <p className="text-xs text-gray-600">
+                                  {customers.find(c => c.id === activity.customerId)?.name} • {activity.date}
+                                </p>
+                              </div>
+                            </div>
+                            {activity.completed ? 
+                              <Check className="text-green-500" size={16} /> : 
+                              <Clock className="text-yellow-500" size={16} />
+                            }
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+                
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h3 className="text-xl font-semibold mb-4">Top Opportunities</h3>
+                  {opportunities.slice(0, 5).map(opp => (
+                    <div key={opp.id} className="p-3 bg-gray-50 rounded mb-2">
+                      <p className="font-medium">{opp.title}</p>
+                      <p className="text-sm text-gray-600">${(opp.value / 1000).toFixed(0)}K</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        
+          // Customers View
+          const Customers = () => (
+            <div className="p-8">
+              <div className="flex justify-between items-center mb-8">
+                <h2 className="text-3xl font-bold">Customers</h2>
+                <button
+                  onClick={() => setShowModal('customer')}
+                  className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                >
+                  <Plus size={20} />
+                  <span>Add Customer</span>
+                </button>
+              </div>
+        
+              <div className="bg-white rounded-lg shadow">
+                <div className="p-4 border-b">
+                  <input
+                    type="text"
+                    placeholder="Search customers..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full outline-none"
+                  />
+                </div>
+                
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th className="text-left p-4">Company</th>
+                      <th className="text-left p-4">Contact</th>
+                      <th className="text-left p-4">Email</th>
+                      <th className="text-left p-4">Phone</th>
+                      <th className="text-left p-4">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {customers
+                      .filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                      .map(customer => {
+                        const stage = customerStages.find(s => s.id === customer.pipelineStage);
+                        return (
+                          <tr key={customer.id} className="border-b hover:bg-gray-50">
+                            <td className="p-4">{customer.name}</td>
+                            <td className="p-4">{customer.contact}</td>
+                            <td className="p-4">{customer.email}</td>
+                            <td className="p-4">{customer.phone}</td>
+                            <td className="p-4">
+                              <span className={`px-2 py-1 text-xs rounded-full ${
+                                customer.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                              }`}>
+                                {customer.status}
+                              </span>
+                              {stage && (
+                                <span className={`ml-2 px-2 py-1 text-xs rounded-full text-white `}>
+                                  {stage.name}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        
+          // Pipeline View
+          const Pipeline = () => {
+            const [selectedOpp, setSelectedOpp] = useState(null);
+            
+            const getOpportunityActivities = (oppId) => {
+              return activities.filter(a => a.opportunityId === oppId);
+            };
+            
+            const getRecentActivity = (oppId) => {
+              const oppActivities = getOpportunityActivities(oppId);
+              return oppActivities.sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+            };
+            
+            const createActivityForOpportunity = (opp) => {
+              setFormData({
+                customerId: opp.customerId,
+                opportunityId: opp.id,
+                subject: `Follow up: `
+              });
+              setShowModal('activity');
+            };
+            
+            return (
+              <div className="p-8">
+                <div className="flex justify-between items-center mb-8">
+                  <h2 className="text-3xl font-bold">Sales Pipeline</h2>
+                  <button
+                    onClick={() => setShowModal('opportunity')}
+                    className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                  >
+                    <Plus size={20} />
+                    <span>Add Opportunity</span>
+                  </button>
+                </div>
+        
+                <div className="flex space-x-4 overflow-x-auto pb-4">
+                  {pipelineStages.map(stage => (
+                    <div
+                      key={stage.id}
+                      className="flex-shrink-0 w-80"
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => handleDrop(e, stage.id)}
+                    >
+                      <div className={` text-white p-3 rounded-t-lg`}>
+                        <h3 className="font-semibold">{stage.name}</h3>
+                        <p className="text-sm opacity-90">
+                          {opportunities.filter(o => o.stage === stage.id).length} deals • 
+                          ${(opportunities.filter(o => o.stage === stage.id).reduce((sum, o) => sum + o.value, 0) / 1000).toFixed(0)}K
+                        </p>
+                      </div>
+                      
+                      <div className="bg-gray-100 min-h-[400px] p-2">
+                        {opportunities
+                          .filter(o => o.stage === stage.id)
+                          .map(opp => {
+                            const recentActivity = getRecentActivity(opp.id);
+                            const customer = customers.find(c => c.id === opp.customerId);
+                            const activityCount = getOpportunityActivities(opp.id).length;
+                            
+                            return (
+                              <div
+                                key={opp.id}
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, opp.id)}
+                                className="bg-white p-3 rounded-lg shadow mb-2 cursor-move hover:shadow-md transition-shadow"
+                                onClick={() => setSelectedOpp(opp)}
+                              >
+                                <h4 className="font-medium">{opp.title}</h4>
+                                <p className="text-sm text-gray-600 mt-1">
+                                  {customer?.name}
+                                </p>
+                                <div className="flex justify-between items-center mt-3">
+                                  <span className="text-lg font-semibold">${(opp.value / 1000).toFixed(0)}K</span>
+                                  <span className="text-sm text-gray-500">{opp.salesRep}</span>
+                                </div>
+                                <div className="mt-2 text-xs text-gray-500">
+                                  <p>Close: {opp.expectedClose || 'Not set'}</p>
+                                  {recentActivity ? (
+                                    <p className="mt-1 flex items-center">
+                                      <Clock size={12} className="mr-1" />
+                                      Last: {recentActivity.subject.substring(0, 20)}...
+                                    </p>
+                                  ) : (
+                                    <p className="mt-1 text-orange-600">No activities yet</p>
+                                  )}
+                                </div>
+                                <div className="mt-2 flex justify-between items-center">
+                                  <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                                    {activityCount} activities
+                                  </span>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      createActivityForOpportunity(opp);
+                                    }}
+                                    className="text-blue-600 hover:text-blue-800"
+                                  >
+                                    <Plus size={16} />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+        
+                {/* Opportunity Details Modal */}
+                {selectedOpp && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setSelectedOpp(null)}>
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 m-4" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-xl font-semibold">{selectedOpp.title}</h3>
+                        <button onClick={() => setSelectedOpp(null)} className="text-gray-500 hover:text-gray-700">
+                          <X size={24} />
+                        </button>
+                      </div>
+                      
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-500">Customer</p>
+                            <p className="font-medium">{customers.find(c => c.id === selectedOpp.customerId)?.name}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-500">Value</p>
+                            <p className="font-medium"></p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-500">Stage</p>
+                            <p className="font-medium">{pipelineStages.find(s => s.id === selectedOpp.stage)?.name}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-500">Expected Close</p>
+                            <p className="font-medium">{selectedOpp.expectedClose || 'Not set'}</p>
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <div className="flex justify-between items-center mb-2">
+                            <h4 className="font-semibold">Related Activities</h4>
+                            <button
+                              onClick={() => {
+                                createActivityForOpportunity(selectedOpp);
+                                setSelectedOpp(null);
+                              }}
+                              className="text-blue-600 hover:text-blue-800 text-sm flex items-center"
+                            >
+                              <Plus size={16} className="mr-1" />
+                              Add Activity
+                            </button>
+                          </div>
+                          <div className="space-y-2 max-h-64 overflow-y-auto">
+                            {getOpportunityActivities(selectedOpp.id).length === 0 ? (
+                              <p className="text-gray-400 text-sm">No activities yet</p>
+                            ) : (
+                              getOpportunityActivities(selectedOpp.id)
+                                .sort((a, b) => new Date(b.date) - new Date(a.date))
+                                .map(activity => (
+                                  <div key={activity.id} className="p-3 bg-gray-50 rounded">
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <p className="font-medium text-sm">{activity.subject}</p>
+                                        <p className="text-xs text-gray-600">
+                                          {activity.date} • {activity.type}
+                                          {activity.completed && ' • Completed'}
+                                        </p>
+                                      </div>
+                                      {activity.completed ? 
+                                        <Check size={16} className="text-green-500" /> : 
+                                        <Clock size={16} className="text-yellow-500" />
+                                      }
+                                    </div>
+                                  </div>
+                                ))
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          };
+        
+          // Quotes View
+          const Quotes = () => (
+            <div className="p-8">
+              <div className="flex justify-between items-center mb-8">
+                <h2 className="text-3xl font-bold">Quotes</h2>
+                <button
+                  onClick={() => setShowModal('quote')}
+                  className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                >
+                  <Plus size={20} />
+                  <span>Create Quote</span>
+                </button>
+              </div>
+        
+              <div className="bg-white rounded-lg shadow p-6">
+                <p className="text-gray-400">No quotes yet</p>
+              </div>
+            </div>
+          );
+        
+          // Activities View
+          const Activities = () => {
+            const today = new Date().toISOString().split('T')[0];
+            
+            // Filter activities based on selected filter
+            const filteredActivities = activities.filter(activity => {
+              if (activityFilter === 'all') return true;
+              if (activityFilter === 'overdue') return !activity.completed && activity.date < today;
+              if (activityFilter === 'today') return activity.date === today;
+              if (activityFilter === 'upcoming') return !activity.completed && activity.date >= today;
+              
+              // Pipeline stage filters
+              const customer = customers.find(c => c.id === activity.customerId);
+              if (activityFilter === 'quotes_out') return customer?.pipelineStage === 'quote_out';
+              if (activityFilter === 'po_pending') return customer?.pipelineStage === 'po_pending';
+              if (activityFilter === 'po_received') return customer?.pipelineStage === 'po_received';
+              
+              return activity.pipelineStage === activityFilter;
+            });
+        
+            const upcomingActivities = filteredActivities.filter(a => !a.completed && a.date >= today);
+            const overdueActivities = filteredActivities.filter(a => !a.completed && a.date < today);
+            const completedActivities = filteredActivities.filter(a => a.completed);
+        
+            const markComplete = (activity) => {
+              const updatedActivities = activities.map(a => 
+                a.id === activity.id ? {...a, completed: true, completedDate: new Date().toISOString()} : a
+              );
+              setActivities(updatedActivities);
+              localStorage.setItem('activities', JSON.stringify(updatedActivities));
+              
+              if (firebaseDb) {
+                const actsObj = {};
+                updatedActivities.forEach(a => {
+                  actsObj[a.id] = a;
+                });
+                saveToFirebase('activities', actsObj);
+              }
+              
+              // Update customer's last activity
+              const updatedCustomers = customers.map(c => 
+                c.id === activity.customerId ? {...c, lastActivity: new Date().toISOString()} : c
+              );
+              setCustomers(updatedCustomers);
+              localStorage.setItem('customers', JSON.stringify(updatedCustomers));
+              
+              if (firebaseDb) {
+                const customersObj = {};
+                updatedCustomers.forEach(c => {
+                  customersObj[c.id] = c;
+                });
+                saveToFirebase('customers', customersObj);
+              }
+              
+              // Show follow-up prompt
+              setShowFollowUp(activity);
+            };
+        
+            const createFollowUp = (originalActivity, followUpData) => {
+              const newActivity = {
+                id: Date.now().toString(),
+                customerId: originalActivity.customerId,
+                type: followUpData.type,
+                subject: followUpData.subject,
+                date: followUpData.date,
+                time: followUpData.time,
+                notes: followUpData.notes,
+                completed: false,
+                followUpCreated: false,
+                pipelineStage: followUpData.pipelineStage
+              };
+              
+              const updatedActivities = [...activities, newActivity];
+              setActivities(updatedActivities);
+              localStorage.setItem('activities', JSON.stringify(updatedActivities));
+              
+              if (firebaseDb) {
+                const actsObj = {};
+                updatedActivities.forEach(a => {
+                  actsObj[a.id] = a;
+                });
+                saveToFirebase('activities', actsObj);
+              }
+              
+              // Update customer pipeline stage
+              if (followUpData.pipelineStage) {
+                const updatedCustomers = customers.map(c => 
+                  c.id === originalActivity.customerId 
+                    ? {...c, pipelineStage: followUpData.pipelineStage} 
+                    : c
+                );
+                setCustomers(updatedCustomers);
+                localStorage.setItem('customers', JSON.stringify(updatedCustomers));
+                
+                if (firebaseDb) {
+                  const customersObj = {};
+                  updatedCustomers.forEach(c => {
+                    customersObj[c.id] = c;
+                  });
+                  saveToFirebase('customers', customersObj);
+                }
+              }
+              
+              // Mark original activity as having follow-up
+              const updatedActivitiesWithFollowUp = updatedActivities.map(a => 
+                a.id === originalActivity.id ? {...a, followUpCreated: true} : a
+              );
+              setActivities(updatedActivitiesWithFollowUp);
+              localStorage.setItem('activities', JSON.stringify(updatedActivitiesWithFollowUp));
+              
+              if (firebaseDb) {
+                const actsObj = {};
+                updatedActivitiesWithFollowUp.forEach(a => {
+                  actsObj[a.id] = a;
+                });
+                saveToFirebase('activities', actsObj);
+              }
+              
+              setShowFollowUp(null);
+            };
+        
+            const deleteActivity = (id) => {
+              if (window.confirm('Delete this activity?')) {
+                const updatedActivities = activities.filter(a => a.id !== id);
+                setActivities(updatedActivities);
+                localStorage.setItem('activities', JSON.stringify(updatedActivities));
+                
+                if (firebaseDb) {
+                  const actsObj = {};
+                  updatedActivities.forEach(a => {
+                    actsObj[a.id] = a;
+                  });
+                  saveToFirebase('activities', actsObj);
+                }
+              }
+            };
+        
+            const getActivityIcon = (type) => {
+              switch(type) {
+                case 'call': return <Phone size={20} className="text-blue-500" />;
+                case 'email': return <Mail size={20} className="text-green-500" />;
+                case 'meeting': return <Calendar size={20} className="text-purple-500" />;
+                default: return <Clock size={20} className="text-gray-500" />;
+              }
+            };
+        
+            const getStageInfo = (customerId) => {
+              const customer = customers.find(c => c.id === customerId);
+              const stage = customerStages.find(s => s.id === customer?.pipelineStage);
+              return { customer, stage };
+            };
+        
+            return (
+              <div className="p-8">
+                <div className="flex justify-between items-center mb-8">
+                  <h2 className="text-3xl font-bold">Activities & Follow-ups</h2>
+                  <div className="flex items-center space-x-4">
+                    <select
+                      value={activityFilter}
+                      onChange={(e) => setActivityFilter(e.target.value)}
+                      className="px-4 py-2 border rounded-lg"
+                    >
+                      <option value="all">All Activities</option>
+                      <option value="today">Today</option>
+                      <option value="upcoming">Upcoming</option>
+                      <option value="overdue">Overdue</option>
+                      <optgroup label="Pipeline Stages">
+                        <option value="quotes_out">Quotes Out</option>
+                        <option value="po_pending">PO Pending</option>
+                        <option value="po_received">PO Received</option>
+                      </optgroup>
+                    </select>
+                    <button
+                      onClick={() => setShowModal('activity')}
+                      className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                    >
+                      <Plus size={20} />
+                      <span>Schedule Activity</span>
+                    </button>
+                  </div>
+                </div>
+        
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Main Activity List */}
+                  <div className="lg:col-span-2 space-y-6">
+                    {/* Overdue Activities */}
+                    {overdueActivities.length > 0 && (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <h3 className="text-lg font-semibold text-red-800 mb-3 flex items-center">
+                          <AlertCircle size={20} className="mr-2" />
+                          Overdue Activities ({overdueActivities.length})
+                        </h3>
+                        <div className="space-y-2">
+                          {overdueActivities.map(activity => {
+                            const { customer, stage } = getStageInfo(activity.customerId);
+                            return (
+                              <div key={activity.id} className="bg-white p-4 rounded-lg border border-red-200">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex items-start space-x-3 flex-1">
+                                    {getActivityIcon(activity.type)}
+                                    <div className="flex-1">
+                                      <h4 className="font-medium text-gray-900">{activity.subject}</h4>
+                                      <p className="text-sm text-gray-600 mt-1">
+                                        {customer?.name || 'Unknown Customer'}
+                                        {stage && (
+                                          <span className={`ml-2 px-2 py-1 text-xs rounded-full text-white `}>
+                                            {stage.name}
+                                          </span>
+                                        )}
+                                      </p>
+                                      <p className="text-sm text-red-600 mt-1">
+                                        Due: {activity.date} at {activity.time}
+                                      </p>
+                                      {activity.notes && (
+                                        <p className="text-sm text-gray-500 mt-2">{activity.notes}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center space-x-2">
+                                    <button
+                                      onClick={() => markComplete(activity)}
+                                      className="text-green-600 hover:text-green-800"
+                                      title="Mark Complete"
+                                    >
+                                      <Check size={20} />
+                                    </button>
+                                    <button
+                                      onClick={() => deleteActivity(activity.id)}
+                                      className="text-red-600 hover:text-red-800"
+                                      title="Delete"
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+        
+                    {/* Upcoming Activities */}
+                    <div className="bg-white rounded-lg shadow">
+                      <div className="p-4 border-b">
+                        <h3 className="text-lg font-semibold">
+                          {activityFilter === 'all' ? 'Upcoming Activities' : `Filtered Activities`} ({upcomingActivities.length})
+                        </h3>
+                      </div>
+                      <div className="p-4">
+                        {upcomingActivities.length === 0 ? (
+                          <p className="text-gray-400 text-center py-8">No activities found</p>
+                        ) : (
+                          <div className="space-y-3">
+                            {upcomingActivities.map(activity => {
+                              const { customer, stage } = getStageInfo(activity.customerId);
+                              return (
+                                <div key={activity.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex items-start space-x-3 flex-1">
+                                      {getActivityIcon(activity.type)}
+                                      <div className="flex-1">
+                                        <h4 className="font-medium text-gray-900">{activity.subject}</h4>
+                                        <p className="text-sm text-gray-600 mt-1">
+                                          {customer?.name || 'Unknown Customer'}
+                                          {stage && (
+                                            <span className={`ml-2 px-2 py-1 text-xs rounded-full text-white `}>
+                                              {stage.name}
+                                            </span>
+                                          )}
+                                        </p>
+                                        <p className="text-sm text-gray-500 mt-1">
+                                          {activity.date} at {activity.time}
+                                        </p>
+                                        {activity.notes && (
+                                          <p className="text-sm text-gray-500 mt-2">{activity.notes}</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                      <button
+                                        onClick={() => markComplete(activity)}
+                                        className="text-green-600 hover:text-green-800"
+                                        title="Mark Complete"
+                                      >
+                                        <Check size={20} />
+                                      </button>
+                                      <button
+                                        onClick={() => deleteActivity(activity.id)}
+                                        className="text-red-600 hover:text-red-800"
+                                        title="Delete"
+                                      >
+                                        <Trash2 size={16} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+        
+                    {/* Completed Activities */}
+                    <div className="bg-white rounded-lg shadow">
+                      <div className="p-4 border-b">
+                        <h3 className="text-lg font-semibold">Completed Activities ({completedActivities.length})</h3>
+                      </div>
+                      <div className="p-4">
+                        {completedActivities.length === 0 ? (
+                          <p className="text-gray-400 text-center py-8">No completed activities</p>
+                        ) : (
+                          <div className="space-y-2 max-h-96 overflow-y-auto">
+                            {completedActivities.slice(0, 20).map(activity => {
+                              const { customer, stage } = getStageInfo(activity.customerId);
+                              return (
+                                <div key={activity.id} className="p-3 bg-gray-50 rounded">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-2">
+                                      {getActivityIcon(activity.type)}
+                                      <div>
+                                        <p className="font-medium text-sm">{activity.subject}</p>
+                                        <p className="text-xs text-gray-600">
+                                          {customer?.name} • {activity.date}
+                                          {activity.followUpCreated && (
+                                            <span className="ml-2 text-blue-600">• Follow-up created</span>
+                                          )}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <Check size={16} className="text-green-500" />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+        
+                  {/* Activity Stats Sidebar */}
+                  <div className="space-y-6">
+                    {/* Pipeline Summary */}
+                    <div className="bg-white rounded-lg shadow p-6">
+                      <h3 className="text-lg font-semibold mb-4">Pipeline Summary</h3>
+                      <div className="space-y-3">
+                        {customerStages.slice(2, 6).map(stage => {
+                          const count = customers.filter(c => c.pipelineStage === stage.id).length;
+                          return (
+                            <div key={stage.id} className="flex justify-between items-center">
+                              <div className="flex items-center space-x-2">
+                                <div className={`w-3 h-3 rounded-full `}></div>
+                                <span className="text-sm text-gray-600">{stage.name}</span>
+                              </div>
+                              <span className="font-semibold">{count}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+        
+                    {/* Stats Card */}
+                    <div className="bg-white rounded-lg shadow p-6">
+                      <h3 className="text-lg font-semibold mb-4">Activity Summary</h3>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600">Today's Activities</span>
+                          <span className="font-semibold">
+                            {activities.filter(a => a.date === today && !a.completed).length}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600">This Week</span>
+                          <span className="font-semibold">
+                            {activities.filter(a => {
+                              const actDate = new Date(a.date);
+                              const weekStart = new Date();
+                              weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+                              return actDate >= weekStart && !a.completed;
+                            }).length}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600">Overdue</span>
+                          <span className="font-semibold text-red-600">{overdueActivities.length}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600">Completed (All Time)</span>
+                          <span className="font-semibold text-green-600">{completedActivities.length}</span>
+                        </div>
+                      </div>
+                    </div>
+        
+                    {/* Activity Types Breakdown */}
+                    <div className="bg-white rounded-lg shadow p-6">
+                      <h3 className="text-lg font-semibold mb-4">Activity Types</h3>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center space-x-2">
+                            <Phone size={16} className="text-blue-500" />
+                            <span className="text-gray-600">Calls</span>
+                          </div>
+                          <span className="font-semibold">
+                            {activities.filter(a => a.type === 'call').length}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center space-x-2">
+                            <Mail size={16} className="text-green-500" />
+                            <span className="text-gray-600">Emails</span>
+                          </div>
+                          <span className="font-semibold">
+                            {activities.filter(a => a.type === 'email').length}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center space-x-2">
+                            <Calendar size={16} className="text-purple-500" />
+                            <span className="text-gray-600">Meetings</span>
+                          </div>
+                          <span className="font-semibold">
+                            {activities.filter(a => a.type === 'meeting').length}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+        
+                    {/* Quick Actions */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <h4 className="font-medium text-blue-900 mb-2">Quick Tips</h4>
+                      <ul className="text-sm text-blue-800 space-y-1">
+                        <li>• Complete activities to trigger follow-ups</li>
+                        <li>• Update pipeline stages as deals progress</li>
+                        <li>• Filter by stage to focus on priorities</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+        
+                {/* Follow-up Modal */}
+                {showFollowUp && (
+                  <FollowUpModal
+                    activity={showFollowUp}
+                    customers={customers}
+                    customerStages={customerStages}
+                    onClose={() => setShowFollowUp(null)}
+                    onCreate={createFollowUp}
+                  />
+                )}
+              </div>
+            );
+          };
+        
+          // Modal
+          const Modal = () => {
+            if (!showModal) return null;
+        
+            const handleInputChange = (field, value) => {
+              setFormData(prev => ({ ...prev, [field]: value }));
+            };
+        
+            return (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowModal(null)}>
+                <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 m-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-semibold">
+                      Add {showModal === 'customer' ? 'Customer' : showModal === 'opportunity' ? 'Opportunity' : showModal === 'quote' ? 'Quote' : 'Activity'}
+                    </h3>
+                    <button onClick={() => {
+                      setShowModal(null);
+                      setFormData({});
+                    }} className="text-gray-500 hover:text-gray-700">
+                      <X size={24} />
+                    </button>
+                  </div>
+        
+                  <div className="space-y-4">
+                    {showModal === 'customer' && (
+                      <>
+                        <input
+                          type="text"
+                          placeholder="Company Name"
+                          className="w-full p-2 border rounded"
+                          value={formData.name || ''}
+                          onChange={(e) => handleInputChange('name', e.target.value)}
+                        />
+                        <input
+                          type="text"
+                          placeholder="Contact Name"
+                          className="w-full p-2 border rounded"
+                          value={formData.contact || ''}
+                          onChange={(e) => handleInputChange('contact', e.target.value)}
+                        />
+                        <input
+                          type="email"
+                          placeholder="Email"
+                          className="w-full p-2 border rounded"
+                          value={formData.email || ''}
+                          onChange={(e) => handleInputChange('email', e.target.value)}
+                        />
+                        <input
+                          type="tel"
+                          placeholder="Phone"
+                          className="w-full p-2 border rounded"
+                          value={formData.phone || ''}
+                          onChange={(e) => handleInputChange('phone', e.target.value)}
+                        />
+                        <select
+                          className="w-full p-2 border rounded"
+                          value={formData.status || ''}
+                          onChange={(e) => handleInputChange('status', e.target.value)}
+                        >
+                          <option value="">Select Status</option>
+                          <option value="prospect">Prospect</option>
+                          <option value="active">Active</option>
+                          <option value="inactive">Inactive</option>
+                        </select>
+                      </>
+                    )}
+        
+                    {showModal === 'opportunity' && (
+                      <>
+                        <input
+                          type="text"
+                          placeholder="Opportunity Title"
+                          className="w-full p-2 border rounded"
+                          value={formData.title || ''}
+                          onChange={(e) => handleInputChange('title', e.target.value)}
+                        />
+                        <select
+                          className="w-full p-2 border rounded"
+                          value={formData.customerId || ''}
+                          onChange={(e) => handleInputChange('customerId', e.target.value)}
+                        >
+                          <option value="">Select Customer</option>
+                          {customers.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="number"
+                          placeholder="Value ($)"
+                          className="w-full p-2 border rounded"
+                          value={formData.value || ''}
+                          onChange={(e) => handleInputChange('value', parseFloat(e.target.value) || '')}
+                        />
+                        <input
+                          type="date"
+                          placeholder="Expected Close Date"
+                          className="w-full p-2 border rounded"
+                          value={formData.expectedClose || ''}
+                          onChange={(e) => handleInputChange('expectedClose', e.target.value)}
+                        />
+                        <div className="border-t pt-4">
+                          <label className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              checked={formData.createActivity || false}
+                              onChange={(e) => handleInputChange('createActivity', e.target.checked)}
+                              className="rounded"
+                            />
+                            <span className="text-sm font-medium">Create initial follow-up activity</span>
+                          </label>
+                          {formData.createActivity && (
+                            <input
+                              type="date"
+                              placeholder="Activity Date"
+                              className="w-full p-2 border rounded mt-2"
+                              value={formData.activityDate || ''}
+                              onChange={(e) => handleInputChange('activityDate', e.target.value)}
+                            />
+                          )}
+                        </div>
+                      </>
+                    )}
+        
+                    {showModal === 'quote' && (
+                      <p className="text-gray-500">Quote form coming soon...</p>
+                    )}
+        
+                    {showModal === 'activity' && (
+                      <>
+                        <select
+                          className="w-full p-2 border rounded"
+                          value={formData.type || ''}
+                          onChange={(e) => handleInputChange('type', e.target.value)}
+                        >
+                          <option value="">Select Type</option>
+                          <option value="call">Call</option>
+                          <option value="email">Email</option>
+                          <option value="meeting">Meeting</option>
+                        </select>
+                        <input
+                          type="text"
+                          placeholder="Subject"
+                          className="w-full p-2 border rounded"
+                          value={formData.subject || ''}
+                          onChange={(e) => handleInputChange('subject', e.target.value)}
+                        />
+                        <select
+                          className="w-full p-2 border rounded"
+                          value={formData.customerId || ''}
+                          onChange={(e) => handleInputChange('customerId', e.target.value)}
+                        >
+                          <option value="">Select Customer</option>
+                          {customers.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                        {formData.customerId && (
+                          <select
+                            className="w-full p-2 border rounded"
+                            value={formData.opportunityId || ''}
+                            onChange={(e) => handleInputChange('opportunityId', e.target.value ? e.target.value : null)}
+                          >
+                            <option value="">Link to Opportunity (Optional)</option>
+                            {opportunities
+                              .filter(o => o.customerId === formData.customerId)
+                              .map(o => (
+                                <option key={o.id} value={o.id}>{o.title}</option>
+                              ))}
+                          </select>
+                        )}
+                        <input
+                          type="date"
+                          className="w-full p-2 border rounded"
+                          value={formData.date || ''}
+                          onChange={(e) => handleInputChange('date', e.target.value)}
+                        />
+                        <input
+                          type="time"
+                          className="w-full p-2 border rounded"
+                          value={formData.time || ''}
+                          onChange={(e) => handleInputChange('time', e.target.value)}
+                        />
+                        <textarea
+                          placeholder="Notes"
+                          className="w-full p-2 border rounded"
+                          rows="3"
+                          value={formData.notes || ''}
+                          onChange={(e) => handleInputChange('notes', e.target.value)}
+                        />
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 block mb-1">Update Pipeline Stage (Optional)</label>
+                          <select
+                            className="w-full p-2 border rounded"
+                            value={formData.pipelineStage || ''}
+                            onChange={(e) => handleInputChange('pipelineStage', e.target.value)}
+                          >
+                            <option value="">Keep Current Stage</option>
+                            {customerStages.map(stage => (
+                              <option key={stage.id} value={stage.id}>{stage.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </>
+                    )}
+          </div>
+
+          <div className="flex justify-end space-x-3 mt-6">
+            <button
+              onClick={() => {
+                setShowModal(null);
+                setFormData({});
+              }}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                if (showModal === 'customer') handleAddCustomer();
+                else if (showModal === 'opportunity') handleAddOpportunity();
+                else if (showModal === 'quote') handleAddQuote();
+                else if (showModal === 'activity') handleAddActivity();
+              }}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Follow-up Modal Component
+  const FollowUpModal = ({ activity, customers, customerStages, onClose, onCreate }) => {
+    const [followUpData, setFollowUpData] = useState({
+      type: 'call',
+      subject: '',
+      date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Default 7 days out
+      time: '10:00 AM',
+      notes: '',
+      pipelineStage: ''
+    });
+    
+    const customer = customers.find(c => c.id === activity.customerId);
+    const currentStage = customerStages.find(s => s.id === customer?.pipelineStage);
+    
+    const handleFollowUpChange = (field, value) => {
+      setFollowUpData(prev => ({ ...prev, [field]: value }));
+    };
+    
+    // Suggested follow-up actions based on current stage
+    const getSuggestedActions = () => {
+      switch (customer?.pipelineStage) {
+        case 'quote_out':
+          return [
+            { subject: 'Follow up on quote', stage: 'negotiating' },
+            { subject: 'Check if quote was received', stage: 'quote_out' },
+            { subject: 'Discuss pricing adjustments', stage: 'negotiating' }
+          ];
+        case 'negotiating':
+          return [
+            { subject: 'Final pricing discussion', stage: 'po_pending' },
+            { subject: 'Address concerns', stage: 'negotiating' },
+            { subject: 'Send revised quote', stage: 'quote_out' }
+          ];
+        case 'po_pending':
+          return [
+            { subject: 'Check on PO status', stage: 'po_pending' },
+            { subject: 'Confirm PO received', stage: 'po_received' },
+            { subject: 'Follow up on approval process', stage: 'po_pending' }
+          ];
+        case 'po_received':
+          return [
+            { subject: 'Confirm delivery schedule', stage: 'fulfillment' },
+            { subject: 'Review order details', stage: 'po_received' },
+            { subject: 'Discuss shipping arrangements', stage: 'fulfillment' }
+          ];
+        default:
+          return [
+            { subject: 'Schedule follow-up call', stage: customer?.pipelineStage || 'lead' },
+            { subject: 'Send additional information', stage: customer?.pipelineStage || 'lead' }
+          ];
+      }
+    };
+    
+    const suggestedActions = getSuggestedActions();
+    
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={onClose}>
+        <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 m-4" onClick={(e) => e.stopPropagation()}>
+          <div className="mb-4">
+            <h3 className="text-xl font-semibold">Create Follow-up Activity</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Activity completed for {customer?.name}
+            </p>
+            {currentStage && (
+              <p className="text-sm mt-1">
+                Current stage: <span className={`px-2 py-1 text-xs rounded-full text-white ${currentStage.color}`}>
+                  {currentStage.name}
+                </span>
+              </p>
+            )}
+          </div>
+          
+          <div className="mb-4">
+            <p className="text-sm font-medium text-gray-700 mb-2">Suggested Actions:</p>
+            <div className="space-y-2">
+              {suggestedActions.map((suggestion, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    handleFollowUpChange('subject', suggestion.subject);
+                    handleFollowUpChange('pipelineStage', suggestion.stage);
+                  }}
+                  className="w-full text-left p-2 border rounded hover:bg-gray-50 text-sm"
+                >
+                  {suggestion.subject}
+                  {suggestion.stage !== customer?.pipelineStage && (
+                    <span className="text-xs text-gray-500 ml-2">
+                      → {customerStages.find(s => s.id === suggestion.stage)?.name}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Activity Type</label>
+              <select
+                className="w-full p-2 border rounded"
+                value={followUpData.type}
+                onChange={(e) => handleFollowUpChange('type', e.target.value)}
+              >
+                <option value="call">Call</option>
+                <option value="email">Email</option>
+                <option value="meeting">Meeting</option>
+              </select>
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Subject</label>
+              <input
+                type="text"
+                className="w-full p-2 border rounded"
+                value={followUpData.subject}
+                onChange={(e) => handleFollowUpChange('subject', e.target.value)}
+                placeholder="What's the follow-up about?"
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">Date</label>
+                <input
+                  type="date"
+                  className="w-full p-2 border rounded"
+                  value={followUpData.date}
+                  onChange={(e) => handleFollowUpChange('date', e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-1">Time</label>
+                <input
+                  type="text"
+                  className="w-full p-2 border rounded"
+                  value={followUpData.time}
+                  onChange={(e) => handleFollowUpChange('time', e.target.value)}
+                  placeholder="10:00 AM"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Update Pipeline Stage</label>
+              <select
+                className="w-full p-2 border rounded"
+                value={followUpData.pipelineStage}
+                onChange={(e) => handleFollowUpChange('pipelineStage', e.target.value)}
+              >
+                <option value="">Keep Current Stage ({currentStage?.name})</option>
+                {customerStages.map(stage => (
+                  <option key={stage.id} value={stage.id}>{stage.name}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-1">Notes</label>
+              <textarea
+                className="w-full p-2 border rounded"
+                rows="3"
+                value={followUpData.notes}
+                onChange={(e) => handleFollowUpChange('notes', e.target.value)}
+                placeholder="Any additional notes..."
+              />
+            </div>
+          </div>
+          
+          <div className="flex justify-end space-x-3 mt-6">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800"
+            >
+              Skip Follow-up
+            </button>
+            <button
+              onClick={() => {
+                if (followUpData.subject) {
+                  onCreate(activity, followUpData);
+                } else {
+                  alert('Please enter a subject for the follow-up');
+                }
+              }}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              Create Follow-up
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex min-h-screen bg-gray-100">
+      <Navigation />
+      
+      <div className="flex-1 overflow-y-auto">
+        {activeView === 'dashboard' && <Dashboard />}
+        {activeView === 'customers' && <Customers />}
+        {activeView === 'pipeline' && <Pipeline />}
+        {activeView === 'quotes' && <Quotes />}
+        {activeView === 'activities' && <Activities />}
+      </div>
+
+      <Modal />
+    </div>
+  );
+};
+
+export default MajorMetalsCRM;
+    </script>
+</body>
+</html>
