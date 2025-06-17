@@ -145,10 +145,14 @@
                     isSyncing: false,
                     lastSync: null,
                     firebaseDb: null,
+                    firebaseStorage: null,
                     isFirebaseConfigured: false,
                     editingCustomer: null,
                     mobileMenuOpen: false,
-                    selectedOpp: null
+                    selectedOpp: null,
+                    editingActivity: null,
+                    uploadingFile: false,
+                    customerFiles: {}
                 };
 
                 this.customerStages = [
@@ -200,10 +204,12 @@
                         // Load Firebase scripts
                         await this.loadScript('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js');
                         await this.loadScript('https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js');
+                        await this.loadScript('https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js');
                         
                         if (window.firebase) {
                             window.firebase.initializeApp(FIREBASE_CONFIG);
                             this.state.firebaseDb = window.firebase.database();
+                            this.state.firebaseStorage = window.firebase.storage();
                             this.setupFirebaseListeners();
                         }
                     } catch (error) {
@@ -487,6 +493,14 @@
                         <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path>
                         <rect x="2" y="9" width="4" height="12"></rect>
                         <circle cx="4" cy="4" r="2"></circle>
+                    </svg>`,
+                    Paperclip: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="${className}">
+                        <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                    </svg>`,
+                    Download: `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="${className}">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
                     </svg>`
                 };
                 return icons[name] || '';
@@ -537,7 +551,8 @@
                     ...this.state.formData,
                     industry: this.state.formData.industry === 'Other' 
                         ? (this.state.formData.customIndustry || 'Other') 
-                        : this.state.formData.industry
+                        : this.state.formData.industry,
+                    attachments: this.state.formData.attachments || []
                 };
                 
                 delete updatedData.customIndustry;
@@ -666,33 +681,67 @@
             }
 
             handleAddActivity() {
-                const newActivity = {
-                    id: Date.now().toString(),
-                    ...this.state.formData,
-                    completed: false,
-                    followUpCreated: false,
-                    pipelineStage: this.state.formData.pipelineStage || 
-                        this.state.customers.find(c => c.id === this.state.formData.customerId)?.pipelineStage || 'lead',
-                    createdAt: new Date().toISOString()
-                };
-                
-                this.state.activities.push(newActivity);
-                localStorage.setItem('activities', JSON.stringify(this.state.activities));
-                
-                if (this.state.firebaseDb && this.state.isOnline) {
-                    this.state.firebaseDb.ref(`activities/${newActivity.id}`).set(newActivity);
-                }
-                
-                // Update customer's pipeline stage if provided
-                if (this.state.formData.pipelineStage && this.state.formData.customerId) {
-                    const customer = this.state.customers.find(c => c.id === this.state.formData.customerId);
-                    if (customer) {
-                        customer.pipelineStage = this.state.formData.pipelineStage;
-                        customer.lastActivity = new Date().toISOString();
-                        localStorage.setItem('customers', JSON.stringify(this.state.customers));
+                if (this.state.editingActivity) {
+                    // Update existing activity
+                    const index = this.state.activities.findIndex(a => a.id === this.state.editingActivity.id);
+                    if (index !== -1) {
+                        this.state.activities[index] = {
+                            ...this.state.editingActivity,
+                            ...this.state.formData,
+                            updatedAt: new Date().toISOString()
+                        };
+                        
+                        localStorage.setItem('activities', JSON.stringify(this.state.activities));
                         
                         if (this.state.firebaseDb && this.state.isOnline) {
-                            this.state.firebaseDb.ref(`customers/${customer.id}`).set(customer);
+                            this.state.firebaseDb.ref(`activities/${this.state.editingActivity.id}`)
+                                .set(this.state.activities[index]);
+                        }
+                        
+                        // Update customer's pipeline stage if changed
+                        if (this.state.formData.pipelineStage && this.state.formData.customerId) {
+                            const customer = this.state.customers.find(c => c.id === this.state.formData.customerId);
+                            if (customer && customer.pipelineStage !== this.state.formData.pipelineStage) {
+                                customer.pipelineStage = this.state.formData.pipelineStage;
+                                customer.lastActivity = new Date().toISOString();
+                                localStorage.setItem('customers', JSON.stringify(this.state.customers));
+                                
+                                if (this.state.firebaseDb && this.state.isOnline) {
+                                    this.state.firebaseDb.ref(`customers/${customer.id}`).set(customer);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Add new activity
+                    const newActivity = {
+                        id: Date.now().toString(),
+                        ...this.state.formData,
+                        completed: false,
+                        followUpCreated: false,
+                        pipelineStage: this.state.formData.pipelineStage || 
+                            this.state.customers.find(c => c.id === this.state.formData.customerId)?.pipelineStage || 'lead',
+                        createdAt: new Date().toISOString()
+                    };
+                    
+                    this.state.activities.push(newActivity);
+                    localStorage.setItem('activities', JSON.stringify(this.state.activities));
+                    
+                    if (this.state.firebaseDb && this.state.isOnline) {
+                        this.state.firebaseDb.ref(`activities/${newActivity.id}`).set(newActivity);
+                    }
+                    
+                    // Update customer's pipeline stage if provided
+                    if (this.state.formData.pipelineStage && this.state.formData.customerId) {
+                        const customer = this.state.customers.find(c => c.id === this.state.formData.customerId);
+                        if (customer) {
+                            customer.pipelineStage = this.state.formData.pipelineStage;
+                            customer.lastActivity = new Date().toISOString();
+                            localStorage.setItem('customers', JSON.stringify(this.state.customers));
+                            
+                            if (this.state.firebaseDb && this.state.isOnline) {
+                                this.state.firebaseDb.ref(`customers/${customer.id}`).set(customer);
+                            }
                         }
                     }
                 }
@@ -773,6 +822,26 @@
                 this.render();
             }
 
+            editActivity(activityId) {
+                const activity = this.state.activities.find(a => a.id === activityId);
+                if (activity) {
+                    this.state.editingActivity = activity;
+                    this.state.formData = {
+                        type: activity.type,
+                        subject: activity.subject,
+                        customerId: activity.customerId,
+                        opportunityId: activity.opportunityId,
+                        date: activity.date,
+                        time: activity.time,
+                        notes: activity.notes,
+                        pipelineStage: activity.pipelineStage,
+                        completed: activity.completed
+                    };
+                    this.state.showModal = 'activity';
+                    this.render();
+                }
+            }
+
             deleteActivity(id) {
                 if (confirm('Delete this activity?')) {
                     this.state.activities = this.state.activities.filter(a => a.id !== id);
@@ -786,11 +855,111 @@
                 }
             }
 
+            async handleFileUpload(event, customerId) {
+                const file = event.target.files[0];
+                if (!file || file.type !== 'application/pdf') {
+                    alert('Please select a PDF file');
+                    return;
+                }
+                
+                if (file.size > 10 * 1024 * 1024) { // 10MB limit
+                    alert('File size must be less than 10MB');
+                    return;
+                }
+                
+                this.state.uploadingFile = true;
+                this.render();
+                
+                try {
+                    if (this.state.firebaseStorage && this.state.isOnline) {
+                        const timestamp = Date.now();
+                        const fileName = `customers/${customerId}/${timestamp}_${file.name}`;
+                        const storageRef = this.state.firebaseStorage.ref(fileName);
+                        
+                        const snapshot = await storageRef.put(file);
+                        const downloadURL = await snapshot.ref.getDownloadURL();
+                        
+                        // Add file info to customer
+                        const customer = customerId ? 
+                            this.state.customers.find(c => c.id === customerId) : 
+                            this.state.formData;
+                            
+                        if (!customer.attachments) {
+                            customer.attachments = [];
+                        }
+                        
+                        customer.attachments.push({
+                            id: timestamp.toString(),
+                            name: file.name,
+                            url: downloadURL,
+                            uploadedAt: new Date().toISOString(),
+                            size: file.size
+                        });
+                        
+                        if (customerId) {
+                            // Update existing customer
+                            localStorage.setItem('customers', JSON.stringify(this.state.customers));
+                            
+                            if (this.state.firebaseDb) {
+                                await this.state.firebaseDb.ref(`customers/${customerId}`).set(customer);
+                            }
+                        } else {
+                            // Update form data for new customer
+                            this.state.formData = customer;
+                        }
+                        
+                        alert('File uploaded successfully');
+                    } else {
+                        alert('File upload requires online connection and Firebase configuration');
+                    }
+                } catch (error) {
+                    console.error('Error uploading file:', error);
+                    alert('Error uploading file. Please try again.');
+                } finally {
+                    this.state.uploadingFile = false;
+                    this.render();
+                }
+            }
+
+            async deleteAttachment(customerId, attachmentId) {
+                if (!confirm('Are you sure you want to delete this attachment?')) return;
+                
+                const customer = this.state.customers.find(c => c.id === customerId);
+                if (!customer || !customer.attachments) return;
+                
+                const attachment = customer.attachments.find(a => a.id === attachmentId);
+                if (!attachment) return;
+                
+                try {
+                    // Delete from Firebase Storage
+                    if (this.state.firebaseStorage && this.state.isOnline && attachment.url) {
+                        const storageRef = this.state.firebaseStorage.refFromURL(attachment.url);
+                        await storageRef.delete();
+                    }
+                    
+                    // Remove from customer data
+                    customer.attachments = customer.attachments.filter(a => a.id !== attachmentId);
+                    
+                    // Update localStorage and Firebase
+                    localStorage.setItem('customers', JSON.stringify(this.state.customers));
+                    
+                    if (this.state.firebaseDb && this.state.isOnline) {
+                        await this.state.firebaseDb.ref(`customers/${customerId}`).set(customer);
+                    }
+                    
+                    this.render();
+                } catch (error) {
+                    console.error('Error deleting attachment:', error);
+                    alert('Error deleting attachment');
+                }
+            }
+
             // Modal handling
             openModal(type) {
                 this.state.showModal = type;
                 this.state.formData = {};
                 this.state.editingCustomer = null;
+                this.state.editingActivity = null;
                 this.render();
             }
 
@@ -798,6 +967,7 @@
                 this.state.showModal = null;
                 this.state.formData = {};
                 this.state.editingCustomer = null;
+                this.state.editingActivity = null;
                 this.render();
             }
 
@@ -1102,6 +1272,11 @@
                                                                     ${stage.name}
                                                                 </span>
                                                             ` : ''}
+                                                            ${customer.attachments && customer.attachments.length > 0 ? `
+                                                                <span class="ml-2 text-gray-500" title="${customer.attachments.length} attachment(s)">
+                                                                    ${this.icon('Paperclip', 14)}
+                                                                </span>
+                                                            ` : ''}
                                                         </div>
                                                         <div class="flex items-center space-x-3">
                                                             <button onclick="app.viewCustomerDetails('${customer.id}')"
@@ -1166,6 +1341,11 @@
                                                         ${stage ? `
                                                             <span class="ml-2 px-2 py-1 text-xs rounded-full text-white ${stage.color}">
                                                                 ${stage.name}
+                                                            </span>
+                                                        ` : ''}
+                                                        ${customer.attachments && customer.attachments.length > 0 ? `
+                                                            <span class="ml-2 text-gray-500" title="${customer.attachments.length} attachment(s)">
+                                                                ${this.icon('Paperclip', 16)}
                                                             </span>
                                                         ` : ''}
                                                     </td>
@@ -1511,6 +1691,11 @@
                                                                         title="Mark Complete">
                                                                     ${this.icon('Check', 20)}
                                                                 </button>
+                                                                <button onclick="app.editActivity('${activity.id}')"
+                                                                        class="text-blue-600 hover:text-blue-800 p-1"
+                                                                        title="Edit">
+                                                                    ${this.icon('Edit2', 16)}
+                                                                </button>
                                                                 <button onclick="app.deleteActivity('${activity.id}')"
                                                                         class="text-red-600 hover:text-red-800 p-1"
                                                                         title="Delete">
@@ -1568,6 +1753,11 @@
                                                                             class="text-green-600 hover:text-green-800 p-1"
                                                                             title="Mark Complete">
                                                                         ${this.icon('Check', 20)}
+                                                                    </button>
+                                                                    <button onclick="app.editActivity('${activity.id}')"
+                                                                            class="text-blue-600 hover:text-blue-800 p-1"
+                                                                            title="Edit">
+                                                                        ${this.icon('Edit2', 16)}
                                                                     </button>
                                                                     <button onclick="app.deleteActivity('${activity.id}')"
                                                                             class="text-red-600 hover:text-red-800 p-1"
@@ -1729,10 +1919,15 @@
             renderModal() {
                 if (!this.state.showModal) return '';
                 
-                const modalTitle = this.state.editingCustomer ? 'Edit' : 'Add';
-                const modalType = this.state.showModal === 'customer' ? 'Customer' : 
-                                 this.state.showModal === 'opportunity' ? 'Opportunity' : 
-                                 this.state.showModal === 'quote' ? 'Quote' : 'Activity';
+                let modalTitle = '';
+                if (this.state.showModal === 'customer') {
+                    modalTitle = this.state.editingCustomer ? 'Edit Customer' : 'Add Customer';
+                } else if (this.state.showModal === 'activity') {
+                    modalTitle = this.state.editingActivity ? 'Edit Activity' : 'Add Activity';
+                } else {
+                    modalTitle = 'Add ' + (this.state.showModal === 'opportunity' ? 'Opportunity' : 
+                                         this.state.showModal === 'quote' ? 'Quote' : '');
+                }
                 
                 return `
                     <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
@@ -1741,7 +1936,7 @@
                              onclick="event.stopPropagation()">
                             <div class="sticky top-0 bg-white border-b p-4 lg:p-6">
                                 <div class="flex justify-between items-center">
-                                    <h3 class="text-lg lg:text-xl font-semibold">${modalTitle} ${modalType}</h3>
+                                    <h3 class="text-lg lg:text-xl font-semibold">${modalTitle}</h3>
                                     <button onclick="app.closeModal()" class="text-gray-500 hover:text-gray-700 p-1">
                                         ${this.icon('X', 24)}
                                     </button>
@@ -1760,7 +1955,8 @@
                                     </button>
                                     <button onclick="app.handleModalSubmit()"
                                             class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                                        ${this.state.editingCustomer && this.state.showModal === 'customer' ? 'Update' : 'Save'}
+                                        ${(this.state.editingCustomer && this.state.showModal === 'customer') || 
+                                          (this.state.editingActivity && this.state.showModal === 'activity') ? 'Update' : 'Save'}
                                     </button>
                                 </div>
                             </div>
@@ -1934,6 +2130,65 @@
                                            class="w-full p-2 border rounded"
                                            pattern="https?://.+">
                                 </div>
+                            </div>
+                        </div>
+
+                        <!-- Attachments Section -->
+                        <div class="form-section">
+                            <h4 class="form-section-title">Attachments</h4>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="text-sm text-gray-600 flex items-center space-x-1 mb-2">
+                                        ${this.icon('Paperclip', 16)}
+                                        <span>Upload PDF Documents</span>
+                                    </label>
+                                    <input type="file" 
+                                           accept="application/pdf"
+                                           onchange="app.handleFileUpload(event, '${formData.id || ''}')"
+                                           class="w-full p-2 border rounded"
+                                           ${this.state.uploadingFile ? 'disabled' : ''}>
+                                    ${this.state.uploadingFile ? `
+                                        <p class="text-sm text-blue-600 mt-2">Uploading file...</p>
+                                    ` : ''}
+                                    <p class="text-xs text-gray-500 mt-1">PDF files only, max 10MB</p>
+                                </div>
+                                
+                                ${(formData.attachments && formData.attachments.length > 0) ? `
+                                    <div class="mt-4">
+                                        <p class="text-sm font-medium text-gray-700 mb-2">Uploaded Files:</p>
+                                        <div class="space-y-2">
+                                            ${formData.attachments.map(attachment => `
+                                                <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                                    <div class="flex items-center space-x-2">
+                                                        ${this.icon('FileText', 16, 'text-gray-400')}
+                                                        <div>
+                                                            <p class="text-sm font-medium">${attachment.name}</p>
+                                                            <p class="text-xs text-gray-500">
+                                                                ${new Date(attachment.uploadedAt).toLocaleDateString()} • 
+                                                                ${(attachment.size / 1024).toFixed(1)}KB
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex items-center space-x-2">
+                                                        <a href="${attachment.url}" 
+                                                           target="_blank"
+                                                           class="text-blue-600 hover:text-blue-800 p-1"
+                                                           title="Download">
+                                                            ${this.icon('Download', 16)}
+                                                        </a>
+                                                        ${formData.id ? `
+                                                            <button onclick="app.deleteAttachment('${formData.id}', '${attachment.id}')"
+                                                                    class="text-red-600 hover:text-red-800 p-1"
+                                                                    title="Delete">
+                                                                ${this.icon('Trash2', 16)}
+                                                            </button>
+                                                        ` : ''}
+                                                    </div>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                ` : ''}
                             </div>
                         </div>
                     </div>
@@ -2386,18 +2641,22 @@
 
                                 <!-- Related Data Tabs -->
                                 <div class="border-t pt-6">
-                                    <div class="flex space-x-4 mb-4 border-b">
+                                    <div class="flex space-x-4 mb-4 border-b overflow-x-auto">
                                         <button onclick="app.setCustomerDetailTab('opportunities')"
-                                                class="pb-2 px-1 ${this.state.customerDetailTab === 'opportunities' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}">
+                                                class="pb-2 px-1 whitespace-nowrap ${this.state.customerDetailTab === 'opportunities' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}">
                                             Opportunities (${opportunities.length})
                                         </button>
                                         <button onclick="app.setCustomerDetailTab('activities')"
-                                                class="pb-2 px-1 ${this.state.customerDetailTab === 'activities' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}">
+                                                class="pb-2 px-1 whitespace-nowrap ${this.state.customerDetailTab === 'activities' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}">
                                             Activities (${activities.length})
                                         </button>
                                         <button onclick="app.setCustomerDetailTab('quotes')"
-                                                class="pb-2 px-1 ${this.state.customerDetailTab === 'quotes' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}">
+                                                class="pb-2 px-1 whitespace-nowrap ${this.state.customerDetailTab === 'quotes' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}">
                                             Quotes (${quotes.length})
+                                        </button>
+                                        <button onclick="app.setCustomerDetailTab('attachments')"
+                                                class="pb-2 px-1 whitespace-nowrap ${this.state.customerDetailTab === 'attachments' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600'}">
+                                            Attachments (${customer.attachments ? customer.attachments.length : 0})
                                         </button>
                                     </div>
 
@@ -2456,6 +2715,53 @@
                                                             </div>
                                                         </div>
                                                     `).join('')}
+                                            </div>
+                                        ` : this.state.customerDetailTab === 'attachments' ? `
+                                            <div class="space-y-3">
+                                                <div class="mb-4">
+                                                    <input type="file" 
+                                                           accept="application/pdf"
+                                                           onchange="app.handleFileUpload(event, '${customer.id}')"
+                                                           class="w-full p-2 border rounded"
+                                                           ${this.state.uploadingFile ? 'disabled' : ''}>
+                                                    ${this.state.uploadingFile ? `
+                                                        <p class="text-sm text-blue-600 mt-2">Uploading file...</p>
+                                                    ` : ''}
+                                                    <p class="text-xs text-gray-500 mt-1">PDF files only, max 10MB</p>
+                                                </div>
+                                                ${(!customer.attachments || customer.attachments.length === 0) ? `
+                                                    <p class="text-gray-400">No attachments yet</p>
+                                                ` : customer.attachments.map(attachment => `
+                                                    <div class="border rounded-lg p-4">
+                                                        <div class="flex justify-between items-start">
+                                                            <div class="flex items-start space-x-3">
+                                                                ${this.icon('FileText', 20, 'text-gray-400')}
+                                                                <div>
+                                                                    <h5 class="font-medium">${attachment.name}</h5>
+                                                                    <p class="text-sm text-gray-600 mt-1">
+                                                                        Uploaded: ${new Date(attachment.uploadedAt).toLocaleDateString()}
+                                                                    </p>
+                                                                    <p class="text-sm text-gray-500">
+                                                                        Size: ${(attachment.size / 1024).toFixed(1)}KB
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <div class="flex items-center space-x-2">
+                                                                <a href="${attachment.url}" 
+                                                                   target="_blank"
+                                                                   class="text-blue-600 hover:text-blue-800 p-1"
+                                                                   title="Download">
+                                                                    ${this.icon('Download', 20)}
+                                                                </a>
+                                                                <button onclick="app.deleteAttachment('${customer.id}', '${attachment.id}')"
+                                                                        class="text-red-600 hover:text-red-800 p-1"
+                                                                        title="Delete">
+                                                                    ${this.icon('Trash2', 16)}
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                `).join('')}
                                             </div>
                                         ` : `
                                             <div class="space-y-3">
@@ -2587,6 +2893,7 @@
                     this.state.editingCustomer = customer;
                     const isCustomIndustry = customer.industry && !INDUSTRIES.includes(customer.industry);
                     this.state.formData = {
+                        id: customer.id,
                         name: customer.name,
                         industry: isCustomIndustry ? 'Other' : customer.industry || '',
                         customIndustry: isCustomIndustry ? customer.industry : '',
@@ -2602,7 +2909,8 @@
                         website: customer.website || '',
                         linkedIn: customer.linkedIn || '',
                         decisionMakers: customer.decisionMakers || '',
-                        budgetCycles: customer.budgetCycles || ''
+                        budgetCycles: customer.budgetCycles || '',
+                        attachments: customer.attachments || []
                     };
                     this.state.showModal = 'customer';
                     this.render();
@@ -2761,4 +3069,3 @@
     </script>
 </body>
 </html>
-                                
