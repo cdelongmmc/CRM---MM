@@ -930,6 +930,101 @@
             }
 
             // Audio Recording
+            async startRecording() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            sampleRate: 44100
+                        } 
+                    });
+                    
+                    // Determine the best MIME type
+                    const mimeTypes = [
+                        'audio/webm;codecs=opus',
+                        'audio/webm',
+                        'audio/mp4',
+                        'audio/ogg;codecs=opus'
+                    ];
+                    
+                    let selectedMimeType = '';
+                    for (const mimeType of mimeTypes) {
+                        if (MediaRecorder.isTypeSupported(mimeType)) {
+                            selectedMimeType = mimeType;
+                            break;
+                        }
+                    }
+                    
+                    if (!selectedMimeType) {
+                        throw new Error('No supported audio format found');
+                    }
+                    
+                    this.state.audioMimeType = selectedMimeType;
+                    this.state.mediaRecorder = new MediaRecorder(stream, { 
+                        mimeType: selectedMimeType 
+                    });
+                    this.state.audioChunks = [];
+                    this.state.recordingTime = 0;
+                    this.state.isRecording = true;
+                    
+                    this.state.mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            this.state.audioChunks.push(event.data);
+                        }
+                    };
+                    
+                    this.state.mediaRecorder.onstop = async () => {
+                        const audioBlob = new Blob(this.state.audioChunks, { 
+                            type: this.state.audioMimeType 
+                        });
+                        
+                        // Stop all tracks to release microphone
+                        stream.getTracks().forEach(track => track.stop());
+                        
+                        await this.saveAudioRecording(audioBlob);
+                        this.render();
+                    };
+                    
+                    this.state.mediaRecorder.start();
+                    
+                    // Start timer
+                    this.state.recordingTimer = setInterval(() => {
+                        this.state.recordingTime++;
+                        const minutes = Math.floor(this.state.recordingTime / 60);
+                        const seconds = this.state.recordingTime % 60;
+                        const timeElement = document.getElementById('recording-time');
+                        if (timeElement) {
+                            timeElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                        }
+                    }, 1000);
+                    
+                    this.render();
+                } catch (error) {
+                    console.error('Error starting recording:', error);
+                    if (error.name === 'NotAllowedError') {
+                        alert('Microphone access denied. Please allow microphone access and try again.');
+                    } else if (error.name === 'NotFoundError') {
+                        alert('No microphone found. Please connect a microphone and try again.');
+                    } else {
+                        alert('Error starting recording: ' + error.message);
+                    }
+                }
+            }
+
+            stopRecording() {
+                if (this.state.mediaRecorder && this.state.isRecording) {
+                    this.state.mediaRecorder.stop();
+                    this.state.isRecording = false;
+                    
+                    if (this.state.recordingTimer) {
+                        clearInterval(this.state.recordingTimer);
+                        this.state.recordingTimer = null;
+                    }
+                    
+                    this.render();
+                }
+            }
             async saveAudioRecording(audioBlob) {
                 if (!this.state.firebaseStorage || !this.state.isOnline) {
                     // Save to local state temporarily
