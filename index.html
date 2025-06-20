@@ -930,81 +930,53 @@
             }
 
             // Audio Recording
-            async startRecording() {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    this.state.mediaRecorder = new MediaRecorder(stream);
-                    this.state.audioChunks = [];
-
-                    this.state.mediaRecorder.ondataavailable = (event) => {
-                        this.state.audioChunks.push(event.data);
-                    };
-
-                    this.state.mediaRecorder.onstop = async () => {
-                        const audioBlob = new Blob(this.state.audioChunks, { type: 'audio/webm' });
-                        await this.saveAudioRecording(audioBlob);
-                        stream.getTracks().forEach(track => track.stop());
-                    };
-
-                    this.state.mediaRecorder.start();
-                    this.state.isRecording = true;
-                    this.state.recordingTime = 0;
-                    
-                    this.state.recordingTimer = setInterval(() => {
-                        this.state.recordingTime++;
-                        this.updateRecordingDisplay();
-                    }, 1000);
-
-                    this.render();
-                } catch (error) {
-                    alert('Unable to access microphone. Please check permissions.');
-                    console.error('Recording error:', error);
-                }
-            }
-
-            stopRecording() {
-                if (this.state.mediaRecorder && this.state.isRecording) {
-                    this.state.mediaRecorder.stop();
-                    this.state.isRecording = false;
-                    clearInterval(this.state.recordingTimer);
-                    this.render();
-                }
-            }
-
-            updateRecordingDisplay() {
-                const minutes = Math.floor(this.state.recordingTime / 60);
-                const seconds = this.state.recordingTime % 60;
-                const display = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                const element = document.getElementById('recording-time');
-                if (element) {
-                    element.textContent = display;
-                }
-            }
-
             async saveAudioRecording(audioBlob) {
                 if (!this.state.firebaseStorage || !this.state.isOnline) {
-                    alert('Audio recording requires online connection and Firebase configuration');
+                    // Save to local state temporarily
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        this.state.formData.audioRecording = {
+                            localData: reader.result,
+                            duration: this.state.recordingTime,
+                            recordedAt: new Date().toISOString(),
+                            mimeType: this.state.audioMimeType || 'audio/webm'
+                        };
+                        alert('Audio recording saved locally (upload requires internet connection)');
+                    };
+                    reader.readAsDataURL(audioBlob);
                     return;
                 }
 
                 try {
                     const timestamp = Date.now();
-                    const fileName = `activities/audio/${timestamp}_recording.webm`;
+                    const fileExtension = this.state.audioMimeType ? this.state.audioMimeType.split('/')[1] : 'webm';
+                    const fileName = `activities/audio/${timestamp}_recording.${fileExtension}`;
                     const storageRef = this.state.firebaseStorage.ref(fileName);
                     
-                    const snapshot = await storageRef.put(audioBlob);
+                    const metadata = {
+                        contentType: this.state.audioMimeType || 'audio/webm',
+                        customMetadata: {
+                            duration: this.state.recordingTime.toString(),
+                            recordedAt: new Date().toISOString()
+                        }
+                    };
+                    
+                    console.log('Uploading audio to Firebase Storage...');
+                    const snapshot = await storageRef.put(audioBlob, metadata);
                     const downloadURL = await snapshot.ref.getDownloadURL();
                     
                     this.state.formData.audioRecording = {
                         url: downloadURL,
                         duration: this.state.recordingTime,
-                        recordedAt: new Date().toISOString()
+                        recordedAt: new Date().toISOString(),
+                        mimeType: this.state.audioMimeType || 'audio/webm'
                     };
 
+                    console.log('Audio recording saved successfully:', downloadURL);
                     alert('Audio recording saved successfully');
                 } catch (error) {
                     console.error('Error saving audio:', error);
-                    alert('Error saving audio recording');
+                    alert('Error saving audio recording: ' + error.message);
                 }
             }
 
@@ -1256,6 +1228,37 @@
                             this.state.customers.find(c => c.id === this.state.formData.customerId)?.pipelineStage || 'lead',
                         createdAt: new Date().toISOString()
                     };
+                    
+                    // Handle local audio data upload if online
+                    if (newActivity.audioRecording && newActivity.audioRecording.localData && this.state.firebaseStorage && this.state.isOnline) {
+                        try {
+                            // Convert base64 back to blob and upload
+                            const response = await fetch(newActivity.audioRecording.localData);
+                            const blob = await response.blob();
+                            
+                            const timestamp = Date.now();
+                            const fileExtension = newActivity.audioRecording.mimeType ? newActivity.audioRecording.mimeType.split('/')[1] : 'webm';
+                            const fileName = `activities/audio/${timestamp}_recording.${fileExtension}`;
+                            const storageRef = this.state.firebaseStorage.ref(fileName);
+                            
+                            const metadata = {
+                                contentType: newActivity.audioRecording.mimeType || 'audio/webm'
+                            };
+                            
+                            const snapshot = await storageRef.put(blob, metadata);
+                            const downloadURL = await snapshot.ref.getDownloadURL();
+                            
+                            // Replace local data with URL
+                            newActivity.audioRecording = {
+                                url: downloadURL,
+                                duration: newActivity.audioRecording.duration,
+                                recordedAt: newActivity.audioRecording.recordedAt,
+                                mimeType: newActivity.audioRecording.mimeType
+                            };
+                        } catch (error) {
+                            console.error('Error uploading local audio:', error);
+                        }
+                    }
                     
                     this.state.activities.push(newActivity);
                     this.saveAllToLocalStorage();
@@ -2369,9 +2372,14 @@
                                                                     </p>
                                                                 ` : ''}
                                                                 ${activity.audioRecording ? `
-                                                                    <audio controls class="mt-2 h-8">
-                                                                        <source src="${activity.audioRecording.url}" type="audio/webm">
+                                                                    <audio controls class="mt-2 w-full">
+                                                                        <source src="${activity.audioRecording.url || activity.audioRecording.localData}" 
+                                                                                type="${activity.audioRecording.mimeType || 'audio/webm'}">
+                                                                        Your browser does not support the audio element.
                                                                     </audio>
+                                                                    <p class="text-xs text-gray-500 mt-1">
+                                                                        Duration: ${Math.floor(activity.audioRecording.duration / 60)}:${(activity.audioRecording.duration % 60).toString().padStart(2, '0')}
+                                                                    </p>
                                                                 ` : ''}
                                                             </div>
                                                             ${!activity.completed ? `
@@ -2939,13 +2947,25 @@
                                         .filter(a => this.state.showCompletedActivities || !a.completed)
                                         .sort((a, b) => new Date(b.date) - new Date(a.date))
                                         .map(activity => `
-                                            <div class="border rounded-lg p-3 ${activity.completed ? 'bg-gray-50' : ''}">
+                                            <div class="border rounded-lg p-3 ${activity.completed ? 'bg-gray-50 cursor-pointer hover:bg-gray-100' : ''}"
+                                                 ${activity.completed ? `onclick="app.viewActivity('${activity.id}')"` : ''}>
                                                 <div class="flex justify-between items-start">
-                                                    <div>
+                                                    <div class="flex-1">
                                                         <p class="font-medium text-sm">${activity.subject}</p>
                                                         <p class="text-xs text-gray-600">${activity.date} at ${activity.time}</p>
                                                         ${activity.notes ? `
                                                             <p class="text-xs text-gray-500 mt-1">${activity.notes}</p>
+                                                        ` : ''}
+                                                        ${activity.audioRecording ? `
+                                                            <div class="mt-2">
+                                                                <audio controls class="w-full max-w-xs h-8" onclick="event.stopPropagation()">
+                                                                    <source src="${activity.audioRecording.url || activity.audioRecording.localData}" 
+                                                                            type="${activity.audioRecording.mimeType || 'audio/webm'}">
+                                                                </audio>
+                                                                <p class="text-xs text-gray-400">
+                                                                    Audio (${Math.floor(activity.audioRecording.duration / 60)}:${(activity.audioRecording.duration % 60).toString().padStart(2, '0')})
+                                                                </p>
+                                                            </div>
                                                         ` : ''}
                                                     </div>
                                                     <span class="text-xs px-2 py-1 rounded-full ${
@@ -3377,9 +3397,15 @@
                                 ${activity.audioRecording ? `
                                     <div>
                                         <p class="text-sm text-gray-500 mb-2">Audio Recording</p>
-                                        <audio controls class="w-full">
-                                            <source src="${activity.audioRecording.url}" type="audio/webm">
+                                        <audio controls class="w-full" preload="metadata">
+                                            <source src="${activity.audioRecording.url || activity.audioRecording.localData}" 
+                                                    type="${activity.audioRecording.mimeType || 'audio/webm'}">
+                                            Your browser does not support the audio element.
                                         </audio>
+                                        <p class="text-xs text-gray-500 mt-1">
+                                            Recorded: ${new Date(activity.audioRecording.recordedAt).toLocaleString()}
+                                            <br>Duration: ${Math.floor(activity.audioRecording.duration / 60)}:${(activity.audioRecording.duration % 60).toString().padStart(2, '0')}
+                                        </p>
                                     </div>
                                 ` : ''}
                                 
