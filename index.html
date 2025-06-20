@@ -122,11 +122,10 @@
             appId: "1:321138365753:web:866da9cdc5a300219944e8"
         };
 
-        // Google Calendar configuration
         const GOOGLE_CONFIG = {
-            clientId: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
-            apiKey: 'YOUR_GOOGLE_API_KEY',
-            scope: 'https://www.googleapis.com/auth/calendar',
+            clientId: '321138365753-d9gndqf1mliep73f58g36p0hvj21frcp.apps.googleusercontent.com',
+            apiKey: 'AIzaSyBFaW2SnV1c9OBcgh5P70KAE2tJGYK_uXE', // You'll need to generate this
+            scope: 'https://www.googleapis.com/auth/calendar.events',
             discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest']
         };
 
@@ -287,40 +286,78 @@
             }
 
             // Google Calendar Integration
-            async initGoogleCalendar() {
-                if (GOOGLE_CONFIG.clientId === 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com') {
-                    console.log('Google Calendar integration requires configuration');
-                    return;
+            async addToGoogleCalendar(activity) {
+                if (!this.state.googleCalendarConnected || !gapi.client.calendar) {
+                    if (confirm('Connect to Google Calendar to sync this activity?')) {
+                        await this.connectGoogleCalendar();
+                        if (!this.state.googleCalendarConnected) return;
+                    } else {
+                        return;
+                    }
                 }
+            
+                const customer = this.state.customers.find(c => c.id === activity.customerId);
+        
+                // Convert time to RFC3339 format
+                const startTime = this.convertTo24Hour(activity.time);
+                const endTime = this.addHour(startTime);
+        
+                // Get user's timezone
+                const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        
+                const event = {
+                summary: activity.subject,
+                description: `${activity.notes || ''}\n\nCustomer: ${customer?.name || 'Unknown'}\nType: ${activity.type}`,
+                start: {
+                    dateTime: `${activity.date}T${startTime}:00`,
+                    timeZone: timeZone
+                },
+                end: {
+                    dateTime: `${activity.date}T${endTime}:00`,
+                    timeZone: timeZone
+                },
+                reminders: {
+                    useDefault: false,
+                    overrides: [
+                        {method: 'popup', minutes: 30},
+                        {method: 'email', minutes: 60}
+                    ]
+                }
+            };
 
-                return new Promise((resolve) => {
-                    gapi.load('client:auth2', async () => {
-                        try {
-                            await gapi.client.init({
-                                apiKey: GOOGLE_CONFIG.apiKey,
-                                clientId: GOOGLE_CONFIG.clientId,
-                                discoveryDocs: GOOGLE_CONFIG.discoveryDocs,
-                                scope: GOOGLE_CONFIG.scope
-                            });
+    try {
+        const response = await gapi.client.calendar.events.insert({
+            calendarId: 'primary',
+            resource: event
+        });
 
-                            this.state.googleAuth = gapi.auth2.getAuthInstance();
-                            
-                            // Listen for sign-in state changes
-                            this.state.googleAuth.isSignedIn.listen((isSignedIn) => {
-                                this.state.googleCalendarConnected = isSignedIn;
-                                this.render();
-                            });
-
-                            // Handle initial sign-in state
-                            this.state.googleCalendarConnected = this.state.googleAuth.isSignedIn.get();
-                            resolve();
-                        } catch (error) {
-                            console.error('Error initializing Google Calendar:', error);
-                            resolve();
-                        }
-                    });
-                });
+        if (response.status === 200) {
+            activity.googleCalendarId = response.result.id;
+            activity.googleCalendarLink = response.result.htmlLink;
+            
+            this.saveAllToLocalStorage();
+            
+            if (this.state.firebaseDb && this.state.isOnline) {
+                await this.state.firebaseDb.ref(`activities/${activity.id}`).set(activity);
             }
+
+            alert('Activity added to Google Calendar!');
+            this.render();
+        } else {
+            throw new Error('Failed to create calendar event');
+        }
+    } catch (error) {
+        console.error('Error adding to Google Calendar:', error);
+        if (error.status === 401) {
+            // Token expired, re-authenticate
+            this.state.googleCalendarConnected = false;
+            alert('Your Google session has expired. Please reconnect.');
+            await this.connectGoogleCalendar();
+        } else {
+            alert('Failed to add activity to Google Calendar. Please try again.');
+        }
+    }
+}
 
             async connectGoogleCalendar() {
                 if (!this.state.googleAuth) {
@@ -1225,19 +1262,22 @@
                 this.closeModal();
             }
 
-            markActivityComplete(activity) {
-                activity.completed = true;
-                activity.completedDate = new Date().toISOString();
-                
-                this.saveAllToLocalStorage();
-                
+            markActivityComplete(activityId) {
+                const activity = this.state.activities.find(a => a.id === activityId);
+                if (activity) {
+                    activity.completed = true;
+                    activity.completedDate = new Date().toISOString();
+        
+                    this.saveAllToLocalStorage();
+        
                 if (this.state.firebaseDb && this.state.isOnline) {
                     this.state.firebaseDb.ref(`activities/${activity.id}`).set(activity);
                 }
-                
+        
                 this.state.showFollowUp = activity;
                 this.render();
-            }
+    }
+}
 
             createFollowUp(originalActivity, followUpData) {
                 const newActivity = {
@@ -1351,7 +1391,7 @@
 
             updateFormField(field, value) {
                 this.state.formData[field] = value;
-                this.render();
+                 // Don't render on every keystroke - let the form handle its own state
             }
 
             updateCharCount(field, value, maxLength) {
@@ -1488,13 +1528,6 @@
                 document.querySelectorAll('.dragging').forEach(el => {
                     el.classList.remove('dragging');
                 });
-            }
-
-            markActivityComplete(activityId) {
-                const activity = this.state.activities.find(a => a.id === activityId);
-                if (activity) {
-                    this.markActivityComplete(activity);
-                }
             }
 
             closeFollowUp() {
@@ -2551,15 +2584,15 @@
                                     <h4 class="form-section-title">Basic Information</h4>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Company Name *</label>
-                                            <input type="text" required
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
+                                            <input type="text"
                                                    value="${this.state.formData.name || ''}"
                                                    oninput="app.updateFormField('name', this.value)"
                                                    class="w-full p-2 border rounded-lg">
                                         </div>
                                         <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Industry *</label>
-                                            <select required
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Industry</label>
+                                            <select
                                                     value="${this.state.formData.industry || ''}"
                                                     onchange="app.updateFormField('industry', this.value)"
                                                     class="w-full p-2 border rounded-lg">
@@ -2587,22 +2620,22 @@
                                     <h4 class="form-section-title">Contact Information</h4>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Primary Contact *</label>
-                                            <input type="text" required
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Primary Contact</label>
+                                            <input type="text"
                                                    value="${this.state.formData.contact || ''}"
                                                    oninput="app.updateFormField('contact', this.value)"
                                                    class="w-full p-2 border rounded-lg">
                                         </div>
                                         <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Email *</label>
-                                            <input type="email" required
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                            <input type="email"
                                                    value="${this.state.formData.email || ''}"
                                                    oninput="app.updateFormField('email', this.value)"
                                                    class="w-full p-2 border rounded-lg">
                                         </div>
                                         <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
-                                            <input type="tel" required
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                                            <input type="tel"
                                                    value="${this.state.formData.phone || ''}"
                                                    oninput="app.updateFormField('phone', this.value)"
                                                    class="w-full p-2 border rounded-lg">
