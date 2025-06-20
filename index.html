@@ -2453,105 +2453,103 @@
             }
             renderFollowUpModal() {
                 if (!this.state.showFollowUp) return '';
-                
+    
                 const activity = this.state.showFollowUp;
                 const customer = this.state.customers.find(c => c.id === activity.customerId);
-                
+    
                 const suggestedActions = [
                     { subject: `Follow up on ${activity.subject}`, stage: activity.pipelineStage },
                     { subject: `Check in with ${customer?.name || 'customer'}`, stage: 'qualified' },
                     { subject: 'Send updated quote', stage: 'quote_out' },
                     { subject: 'Schedule product demo', stage: 'negotiating' }
                 ];
-                
+    
                 return `
                     <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-                         onclick="app.closeFollowUp()">
-                        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6"
-                             onclick="event.stopPropagation()">
+                        onclick="app.closeFollowUp()">
+                        <div class="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6"
+                            onclick="event.stopPropagation()">
                             <h3 class="text-lg font-semibold mb-4">Create Follow-up Activity</h3>
-                            
+                
                             <div class="mb-4">
-                                <p class="text-sm text-gray-600">Completed: ${activity.subject}</p>
-                                <p class="text-xs text-gray-500">${customer?.name || 'Unknown'}</p>
+                                 <p class="text-sm text-gray-600">Completed: ${activity.subject}</p>
+                                 <p class="text-xs text-gray-500">${customer?.name || 'Unknown'}</p>
                             </div>
-                            
-                            <div class="space-y-4">
+                
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                                <select id="followup-type" class="w-full p-2 border rounded-lg">
+                                    <option value="call">Call</option>
+                                    <option value="email">Email</option>
+                                    <option value="meeting">Meeting</option>
+                                </select>
+                            </div>
+                    
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                                <input type="text" id="followup-subject" 
+                                    class="w-full p-2 border rounded-lg"
+                                    placeholder="Follow-up subject">
+                            </div>
+                    
+                            <div class="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
-                                    <select id="followup-type" class="w-full p-2 border rounded-lg">
-                                        <option value="call">Call</option>
-                                        <option value="email">Email</option>
-                                        <option value="meeting">Meeting</option>
-                                    </select>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                                    <input type="date" id="followup-date"
+                                            value="${new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]}"
+                                            class="w-full p-2 border rounded-lg">
                                 </div>
-                                
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Subject</label>
-                                    <input type="text" id="followup-subject" 
-                                           class="w-full p-2 border rounded-lg"
-                                           placeholder="Follow-up subject">
-                                </div>
-                                
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                                        <input type="date" id="followup-date"
-                                               value="${new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]}"
-                                               class="w-full p-2 border rounded-lg">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Time</label>
-                                        <input type="text" id="followup-time"
-                                               value="10:00 AM"
-                                               class="w-full p-2 border rounded-lg">
-                                    </div>
-                                </div>
-                                
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Pipeline Stage</label>
-                                    <select id="followup-stage" class="w-full p-2 border rounded-lg">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Time</label>
+                                    <input type="text" id="followup-time"
+                                        value="10:00 AM"
+                                        class="w-full p-2 border rounded-lg">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Pipeline Stage</label>
+                                <select id="followup-stage" class="w-full p-2 border rounded-lg">
                                         ${this.customerStages.map(stage => `
                                             <option value="${stage.id}" ${stage.id === activity.pipelineStage ? 'selected' : ''}>
                                                 ${stage.name}
                                             </option>
                                         `).join('')}
-                                    </select>
-                                </div>
-                                
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                                    <textarea id="followup-notes" rows="3"
-                                              class="w-full p-2 border rounded-lg"
-                                              placeholder="Additional notes..."></textarea>
-                                </div>
-                                
-                                <div class="mb-4">
-                                    <p class="text-sm font-medium text-gray-700 mb-2">Suggested Actions:</p>
-                                    <div class="space-y-2">
-                                        ${suggestedActions.map(action => `
-                                            <button onclick="app.selectSuggestedAction('${action.subject}', '${action.stage}')"
-                                                    class="w-full text-left p-2 text-sm bg-gray-50 hover:bg-gray-100 rounded">
-                                                ${action.subject}
-                                            </button>
-                                        `).join('')}
-                                    </div>
-                                </div>
+                                </select>
                             </div>
-                            
-                            <div class="flex justify-end space-x-3 mt-6">
-                                <button onclick="app.closeFollowUp()"
-                                        class="px-4 py-2 text-gray-600 hover:text-gray-800">
-                                    Skip Follow-up
-                                </button>
-                                <button onclick="app.createFollowUpFromModal()"
-                                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                                    Create Follow-up
-                                </button>
+                    
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                                <textarea id="followup-notes" rows="3"
+                                        class="w-full p-2 border rounded-lg"
+                                        placeholder="Additional notes..."></textarea>
+                            </div>
+                    
+                            <div class="mb-4">
+                                <p class="text-sm font-medium text-gray-700 mb-2">Suggested Actions:</p>
+                                <div class="space-y-2">
+                                    ${suggestedActions.map(action => `
+                                        <button onclick="app.selectSuggestedAction('${action.subject}', '${action.stage}')"
+                                                class="w-full text-left p-2 text-sm bg-gray-50 hover:bg-gray-100 rounded">
+                                            ${action.subject}
+                                        </button>
+                                    `).join('')}
+                                </div>
                             </div>
                         </div>
-                    </div>
-                `;
+                
+                        <div class="flex justify-end space-x-3 mt-6">
+                            <button onclick="app.closeFollowUp()"
+                                    class="px-4 py-2 text-gray-600 hover:text-gray-800">
+                                Skip Follow-up
+                            </button>
+                            <button onclick="app.createFollowUpFromModal()"
+                                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                Create Follow-up
+                            </button>
+                        </div>
+                </div>
+        </div>
+    `;
             }
 
             renderModals() {
