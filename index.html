@@ -335,20 +335,17 @@
 
                             // Handle initial sign-in state
                             this.state.googleCalendarConnected = this.state.googleAuth.isSignedIn.get();
-                            console.log('Initial connection status:', this.state.googleCalendarConnected);
+                            console.log('Initial Google Calendar connection status:', this.state.googleCalendarConnected);
 
                             resolve();
                         } catch (error) {
                             console.error('Error initializing Google Calendar:', error);
-                            console.error('Full error object:', JSON.stringify(error, null, 2));
-
-                            // Check specific error types
-                            if (error.error === 'idpiframe_initialization_failed') {
-                                console.error('Cookies/3rd party storage might be blocked');
-                            } else if (error.details) {
-                                console.error('Error details:', error.details);
-                            }
-
+                            // Log error.message for a more specific description
+                            console.error('Error message:', error.message);
+                            // Log error.details if available
+                            console.error('Error details:', error.details);
+                            // Optionally log the entire error object for full inspection
+                            // console.error('Full error object:', error);
                             resolve();
                         }
                     });
