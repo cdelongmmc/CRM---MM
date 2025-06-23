@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Major Metals CRM</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://apis.google.com/js/api.js"></script>
     <style>
         /* Mobile-specific optimizations */
         @media (max-width: 1024px) {
@@ -103,115 +102,15 @@
             font-size: 0.75rem;
             margin: 0.125rem;
         }
-        </style>
-        </head>
-        <body>
-        <div id="app"></div>
+    </style>
+</head>
+<body>
+    <div id="app"></div>
 
-        <div id="google-calendar-section" class="p-4">
-            <button
-            id="google-calendar-btn"
-            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow"
-            disabled
-            >
-            Connect Google Calendar
-            </button>
-            <p id="google-calendar-status" class="text-sm text-gray-600 mt-2"></p>
-        </div>
+    <!-- Google API Script -->
+    <script src="https://apis.google.com/js/api.js"></script>
 
-        <script>
-            const GOOGLE_CONFIG = {
-            clientId: '321138365753-d9gndqf1mliep73f58g36p0hvj21frcp.apps.googleusercontent.com',
-            apiKey: 'AIzaSyBFaW2SnV1c9OBcgh5P70KAE2tJGYK_uXE',
-            scope: 'https://www.googleapis.com/auth/calendar.events',
-            discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest']
-            };
-
-            let googleAuthInstance = null;
-
-            function updateGoogleStatus(msg, success = false) {
-            const statusEl = document.getElementById("google-calendar-status");
-            if (!statusEl) return;
-            statusEl.textContent = msg;
-            statusEl.className = success ? "text-green-600 mt-2 text-sm" : "text-red-600 mt-2 text-sm";
-            }
-
-            function toggleGoogleButton(enabled) {
-            const btn = document.getElementById("google-calendar-btn");
-            if (btn) btn.disabled = !enabled;
-            }
-
-            async function initGoogleCalendarInline() {
-            if (!GOOGLE_CONFIG.clientId || GOOGLE_CONFIG.clientId.includes('YOUR_GOOGLE_CLIENT_ID')) {
-                updateGoogleStatus("Google Calendar integration is not properly configured.");
-                return;
-            }
-
-            gapi.load('client:auth2', async () => {
-                try {
-                await gapi.client.init({
-                    apiKey: GOOGLE_CONFIG.apiKey,
-                    clientId: GOOGLE_CONFIG.clientId,
-                    discoveryDocs: GOOGLE_CONFIG.discoveryDocs,
-                    scope: GOOGLE_CONFIG.scope
-                });
-
-                await gapi.client.load('calendar', 'v3');
-
-                googleAuthInstance = gapi.auth2.getAuthInstance();
-
-                googleAuthInstance.isSignedIn.listen((isSignedIn) => {
-                    if (isSignedIn) {
-                    updateGoogleStatus("Google Calendar connected.", true);
-                    }
-                });
-
-                if (googleAuthInstance.isSignedIn.get()) {
-                    updateGoogleStatus("Google Calendar already connected.", true);
-                }
-
-                toggleGoogleButton(true);
-                } catch (err) {
-                console.error("Google Init Error:", err);
-                updateGoogleStatus("Failed to initialize Google Calendar.");
-                }
-            });
-            }
-
-            async function handleGoogleConnect() {
-            if (!googleAuthInstance) {
-                updateGoogleStatus("Google API not initialized.");
-                return;
-            }
-
-            try {
-                await googleAuthInstance.signIn({ scope: GOOGLE_CONFIG.scope, prompt: 'consent' });
-
-                const user = googleAuthInstance.currentUser.get();
-                const granted = user.hasGrantedScopes(GOOGLE_CONFIG.scope);
-
-                if (granted) {
-                updateGoogleStatus("Successfully connected to Google Calendar!", true);
-                } else {
-                updateGoogleStatus("Calendar permissions not granted.");
-                }
-            } catch (error) {
-                console.error("Sign-In Error:", error);
-                if (error.error !== 'popup_closed_by_user') {
-                updateGoogleStatus("Google sign-in failed.");
-                }
-            }
-            }
-
-            window.addEventListener('load', () => {
-            initGoogleCalendarInline();
-            const btn = document.getElementById("google-calendar-btn");
-            if (btn) btn.onclick = handleGoogleConnect;
-            });
-        </script>
-
-
-        <script>
+    <script>
         // Firebase configuration
         const FIREBASE_CONFIG = {
             apiKey: "AIzaSyCKIKzPH6ibixe7rnq0em4AAsdq5b10WDA",
@@ -221,6 +120,14 @@
             storageBucket: "crm-mm-7bdfb.firebasestorage.app",
             messagingSenderId: "321138365753",
             appId: "1:321138365753:web:866da9cdc5a300219944e8"
+        };
+
+        // Google Calendar configuration
+        const GOOGLE_CONFIG = {
+            clientId: '321138365753-d9gndqf1mliep73f58g36p0hvj21frcp.apps.googleusercontent.com',
+            apiKey: 'AIzaSyBFaW2SnV1c9OBcgh5P70KAE2tJGYK_uXE',
+            scope: 'https://www.googleapis.com/auth/calendar.events',
+            discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest']
         };
 
         // Industries list
@@ -377,6 +284,167 @@
                     script.onerror = reject;
                     document.head.appendChild(script);
                 });
+            }
+
+            // Google Calendar Integration
+            async initGoogleCalendar() {
+                if (!GOOGLE_CONFIG.clientId || GOOGLE_CONFIG.clientId.includes('YOUR_GOOGLE_CLIENT_ID')) {
+                    console.log('Google Calendar integration not configured');
+                    return;
+                }
+
+                return new Promise((resolve) => {
+                    gapi.load('client:auth2', async () => {
+                        try {
+                            await gapi.client.init({
+                                apiKey: GOOGLE_CONFIG.apiKey,
+                                clientId: GOOGLE_CONFIG.clientId,
+                                discoveryDocs: GOOGLE_CONFIG.discoveryDocs,
+                                scope: GOOGLE_CONFIG.scope
+                            });
+
+                            this.state.googleAuth = gapi.auth2.getAuthInstance();
+                            
+                            // Listen for sign-in state changes
+                            this.state.googleAuth.isSignedIn.listen((isSignedIn) => {
+                                this.state.googleCalendarConnected = isSignedIn;
+                                if (isSignedIn) {
+                                    console.log('Google Calendar connected successfully');
+                                }
+                                this.render();
+                            });
+
+                            // Handle initial sign-in state
+                            this.state.googleCalendarConnected = this.state.googleAuth.isSignedIn.get();
+                            
+                            // Check if we have necessary permissions
+                            if (this.state.googleCalendarConnected) {
+                                const user = this.state.googleAuth.currentUser.get();
+                                const hasCalendarScope = user.hasGrantedScopes(GOOGLE_CONFIG.scope);
+                                if (!hasCalendarScope) {
+                                    console.log('Calendar scope not granted, requesting...');
+                                    await this.state.googleAuth.signIn({scope: GOOGLE_CONFIG.scope});
+                                }
+                            }
+                            
+                            resolve();
+                        } catch (error) {
+                            console.error('Error initializing Google Calendar:', error);
+                            resolve();
+                        }
+                    });
+                });
+            }
+
+            async connectGoogleCalendar() {
+                if (!this.state.googleAuth) {
+                    alert('Google Calendar integration is not properly configured.');
+                    return;
+                }
+
+                try {
+                    // Sign in with calendar scope
+                    await this.state.googleAuth.signIn({
+                        scope: GOOGLE_CONFIG.scope,
+                        prompt: 'consent' // Force showing consent screen
+                    });
+                    
+                    // Verify we have calendar permissions
+                    const user = this.state.googleAuth.currentUser.get();
+                    const hasCalendarScope = user.hasGrantedScopes(GOOGLE_CONFIG.scope);
+                    
+                    if (hasCalendarScope) {
+                        console.log('Successfully connected to Google Calendar');
+                    } else {
+                        alert('Calendar permissions were not granted. Please try again.');
+                    }
+                } catch (error) {
+                    console.error('Error signing in to Google:', error);
+                    if (error.error === 'popup_closed_by_user') {
+                        // User closed the popup, don't show error
+                        return;
+                    }
+                    alert('Failed to connect to Google Calendar. Please try again.');
+                }
+            }
+
+            async disconnectGoogleCalendar() {
+                if (this.state.googleAuth) {
+                    await this.state.googleAuth.signOut();
+                }
+            }
+
+            async addToGoogleCalendar(activity) {
+                if (!this.state.googleCalendarConnected || !gapi.client.calendar) {
+                    if (confirm('Connect to Google Calendar to sync this activity?')) {
+                        await this.connectGoogleCalendar();
+                        if (!this.state.googleCalendarConnected) return;
+                    } else {
+                        return;
+                    }
+                }
+            
+                const customer = this.state.customers.find(c => c.id === activity.customerId);
+        
+                // Convert time to RFC3339 format
+                const startTime = this.convertTo24Hour(activity.time);
+                const endTime = this.addHour(startTime);
+        
+                // Get user's timezone
+                const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        
+                const event = {
+                    summary: activity.subject,
+                    description: `${activity.notes || ''}\n\nCustomer: ${customer?.name || 'Unknown'}\nType: ${activity.type}`,
+                    start: {
+                        dateTime: `${activity.date}T${startTime}:00`,
+                        timeZone: timeZone
+                    },
+                    end: {
+                        dateTime: `${activity.date}T${endTime}:00`,
+                        timeZone: timeZone
+                    },
+                    reminders: {
+                        useDefault: false,
+                        overrides: [
+                            {method: 'popup', minutes: 30},
+                            {method: 'email', minutes: 60}
+                        ]
+                    }
+                };
+
+                try {
+                    const response = await gapi.client.calendar.events.insert({
+                        calendarId: 'primary',
+                        resource: event
+                    });
+
+                    if (response.status === 200) {
+                        activity.googleCalendarId = response.result.id;
+                        activity.googleCalendarLink = response.result.htmlLink;
+                        
+                        this.saveAllToLocalStorage();
+                        
+                        if (this.state.firebaseDb && this.state.isOnline) {
+                            await this.state.firebaseDb.ref(`activities/${activity.id}`).set(activity);
+                        }
+
+                        alert('Activity added to Google Calendar!');
+                        this.render();
+                    } else {
+                        throw new Error('Failed to create calendar event');
+                    }
+                } catch (error) {
+                    console.error('Error adding to Google Calendar:', error);
+                    if (error.status === 401) {
+                        // Token expired, re-authenticate
+                        this.state.googleCalendarConnected = false;
+                        alert('Your Google session has expired. Please reconnect.');
+                        await this.connectGoogleCalendar();
+                    } else {
+                        alert('Failed to add activity to Google Calendar. Please try again.');
+                    }
+                }
             }
 
             convertTo24Hour(time12h) {
