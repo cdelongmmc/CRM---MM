@@ -148,7 +148,9 @@
 <body>
     <div id="app"></div>
 
-    <!-- Google API Script -->
+    <!-- Google Identity Services for new auth -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <!-- Google API Script for Calendar API -->
     <script src="https://apis.google.com/js/api.js"></script>
 
     <script>
@@ -208,45 +210,47 @@
         // Main CRM Application Class
         class MajorMetalsCRM {
             constructor() {
-                this.state = {
-                    activeView: 'dashboard',
-                    customers: [],
-                    opportunities: [],
-                    quotes: [],
-                    activities: [],
-                    showModal: null,
-                    formData: {},
-                    searchTerm: '',
-                    globalSearchTerm: '',
-                    globalSearchResults: null,
-                    activityFilter: 'all',
-                    industryFilter: 'all',
-                    showFollowUp: null,
-                    isOnline: navigator.onLine,
-                    isSyncing: false,
-                    lastSync: null,
-                    firebaseDb: null,
-                    firebaseStorage: null,
-                    isFirebaseConfigured: false,
-                    editingCustomer: null,
-                    mobileMenuOpen: false,
-                    selectedOpp: null,
-                    editingActivity: null,
-                    viewingActivity: null,
-                    uploadingFile: false,
-                    bulkMode: false,
-                    selectedItems: new Set(),
-                    isRecording: false,
-                    mediaRecorder: null,
-                    audioChunks: [],
-                    recordingTime: 0,
-                    recordingTimer: null,
-                    googleCalendarConnected: false,
-                    googleAuth: null,
-                    showCompletedActivities: false,
-                    customerDetailTab: 'opportunities',
-                    viewingCustomerId: null
-                };
+            this.tokenClient = null;
+            this.accessToken = null;
+            // ... rest of your existing constructor code
+            this.state = {
+                activeView: 'dashboard',
+                customers: [],
+                opportunities: [],
+                quotes: [],
+                activities: [],
+                showModal: null,
+                formData: {},
+                searchTerm: '',
+                globalSearchTerm: '',
+                globalSearchResults: null,
+                activityFilter: 'all',
+                industryFilter: 'all',
+                showFollowUp: null,
+                isOnline: navigator.onLine,
+                isSyncing: false,
+                lastSync: null,
+                firebaseDb: null,
+                firebaseStorage: null,
+                isFirebaseConfigured: false,
+                editingCustomer: null,
+                mobileMenuOpen: false,
+                selectedOpp: null,
+                editingActivity: null,
+                viewingActivity: null,
+                uploadingFile: false,
+                bulkMode: false,
+                selectedItems: new Set(),
+                isRecording: false,
+                mediaRecorder: null,
+                audioChunks: [],
+                recordingTime: 0,
+                recordingTimer: null,
+                googleCalendarConnected: false,
+                showCompletedActivities: false,
+                customerDetailTab: 'opportunities',
+                viewingCustomerId: null
+            };
 
                 this.customerStages = [
                     { id: 'lead', name: 'Lead', color: 'bg-gray-500' },
@@ -327,190 +331,194 @@
                 });
             }
 
-            async initGoogleCalendar() {
-                console.log('Starting Google Calendar initialization...');
-                console.log('Config:', GOOGLE_CONFIG);
+            // Replace the initGoogleCalendar function
+async initGoogleCalendar() {
+    if (!GOOGLE_CONFIG.clientId || GOOGLE_CONFIG.clientId.includes('YOUR_GOOGLE_CLIENT_ID')) {
+        console.log('Google Calendar integration not configured');
+        return;
+    }
 
-                if (!GOOGLE_CONFIG.clientId || GOOGLE_CONFIG.clientId.includes('YOUR_GOOGLE_CLIENT_ID')) {
-                    console.log('Google Calendar integration not configured');
+    // Wait for the Google Identity Services to load
+    if (!window.google || !window.google.accounts) {
+        console.log('Waiting for Google Identity Services to load...');
+        setTimeout(() => this.initGoogleCalendar(), 500);
+        return;
+    }
+
+    try {
+        // Initialize the tokenClient for the new auth flow
+        this.tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_CONFIG.clientId,
+            scope: GOOGLE_CONFIG.scope,
+            callback: (response) => {
+                if (response.error) {
+                    console.error('Token error:', response);
                     return;
                 }
-
-                // Check if running from correct domain
-                console.log('Current origin:', window.location.origin);
-
-                if (!window.gapi) {
-                    console.error('Google API script not loaded - check network tab');
-                    return;
-                }
-
-                return new Promise((resolve) => {
-                    gapi.load('client:auth2', async () => {
-                        try {
-                            console.log('Google API loaded, initializing client...');
-
-                            await gapi.client.init({
-                                apiKey: GOOGLE_CONFIG.apiKey,
-                                clientId: GOOGLE_CONFIG.clientId,
-                                discoveryDocs: GOOGLE_CONFIG.discoveryDocs,
-                                scope: GOOGLE_CONFIG.scope
-                            });
-
-                            console.log('Google client initialized successfully');
-
-                            this.state.googleAuth = gapi.auth2.getAuthInstance();
-
-                            if (!this.state.googleAuth) {
-                                console.error('Failed to get auth instance');
-                                resolve();
-                                return;
-                            }
-
-                            // Listen for sign-in state changes
-                            this.state.googleAuth.isSignedIn.listen((isSignedIn) => {
-                                this.state.googleCalendarConnected = isSignedIn;
-                                console.log('Google Calendar connection status changed:', isSignedIn);
-                                this.render();
-                            });
-
-                            // Handle initial sign-in state
-                            this.state.googleCalendarConnected = this.state.googleAuth.isSignedIn.get();
-                            console.log('Initial Google Calendar connection status:', this.state.googleCalendarConnected);
-
-                            resolve();
-                        } catch (error) {
-                            console.error('Error initializing Google Calendar:', error);
-                            // Log error.message for a more specific description
-                            console.error('Error message:', error.message);
-                            // Log error.details if available
-                            console.error('Error details:', error.details);
-                            // Optionally log the entire error object for full inspection
-                            // console.error('Full error object:', error);
-                            resolve();
-                        }
-                    });
-                });
-            }
-
-            // Replace the connectGoogleCalendar function
-            async connectGoogleCalendar() {
-                if (!this.state.googleAuth) {
-                alert('Google Calendar integration is not properly configured. Please check your API credentials.');
-                return;
-                }
-
-                try {
-                // Use signIn without parameters first, then grant scope if needed
-                const googleUser = await this.state.googleAuth.signIn();
-
-                // Check if we have calendar scope
-                const hasScope = googleUser.hasGrantedScopes(GOOGLE_CONFIG.scope);
-
-                if (!hasScope) {
-                    // Request additional scope
-                    const options = new gapi.auth2.SigninOptionsBuilder();
-                    options.setScope(GOOGLE_CONFIG.scope);
-                    await googleUser.grant(options);
-                }
-
-                console.log('Successfully connected to Google Calendar');
+                
+                // Store the access token
+                this.accessToken = response.access_token;
                 this.state.googleCalendarConnected = true;
+                console.log('Google Calendar connected successfully');
                 this.render();
-
-                } catch (error) {
-                console.error('Error signing in to Google:', error);
-                if (error.error === 'popup_closed_by_user') {
-                    // User closed the popup, don't show error
-                    return;
-                } else if (error.error === 'access_denied') {
-                    alert('Access denied. Please grant calendar permissions to use this feature.');
-                } else {
-                    alert('Failed to connect to Google Calendar. Error: ' + (error.error || error.message || 'Unknown error'));
-                }
-                }
             }
+        });
 
-            // Update the addToGoogleCalendar function with better error handling
-            async addToGoogleCalendar(activity) {
-                if (!this.state.googleCalendarConnected) {
-                if (confirm('Connect to Google Calendar to sync this activity?')) {
-                    await this.connectGoogleCalendar();
-                    if (!this.state.googleCalendarConnected) return;
-                } else {
-                    return;
-                }
-                }
-
-                // Check if gapi.client.calendar is loaded
-                if (!gapi.client.calendar) {
-                console.error('Google Calendar API not loaded');
-                await gapi.client.load('calendar', 'v3');
-                }
-
-                const customer = this.state.customers.find(c => c.id === activity.customerId);
-
-                // Convert time to RFC3339 format
-                const startTime = this.convertTo24Hour(activity.time);
-                const endTime = this.addHour(startTime);
-
-                // Get user's timezone
-                const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-                const event = {
-                summary: activity.subject,
-                description: `${activity.notes || ''}\n\nCustomer: ${customer?.name || 'Unknown'}\nType: ${activity.type}`,
-                start: {
-                    dateTime: `${activity.date}T${startTime}:00`,
-                    timeZone: timeZone
-                },
-                end: {
-                    dateTime: `${activity.date}T${endTime}:00`,
-                    timeZone: timeZone
-                },
-                reminders: {
-                    useDefault: false,
-                    overrides: [
-                    { method: 'popup', minutes: 30 },
-                    { method: 'email', minutes: 60 }
-                    ]
-                }
-                };
-
+        // Load the Google API client library
+        return new Promise((resolve) => {
+            gapi.load('client', async () => {
                 try {
-                const response = await gapi.client.calendar.events.insert({
-                    calendarId: 'primary',
-                    resource: event
-                });
-
-                if (response.status === 200 || response.result) {
-                    activity.googleCalendarId = response.result.id;
-                    activity.googleCalendarLink = response.result.htmlLink;
-
-                    this.saveAllToLocalStorage();
-
-                    if (this.state.firebaseDb && this.state.isOnline) {
-                    await this.state.firebaseDb.ref(`activities/${activity.id}`).set(activity);
-                    }
-
-                    alert('Activity added to Google Calendar!');
-                    this.render();
-                } else {
-                    throw new Error('Failed to create calendar event');
-                }
+                    await gapi.client.init({
+                        apiKey: GOOGLE_CONFIG.apiKey,
+                        discoveryDocs: GOOGLE_CONFIG.discoveryDocs
+                    });
+                    console.log('Google API client initialized');
+                    resolve();
                 } catch (error) {
-                console.error('Error adding to Google Calendar:', error);
-                if (error.status === 401) {
-                    // Token expired, re-authenticate
-                    this.state.googleCalendarConnected = false;
-                    alert('Your Google session has expired. Please reconnect.');
-                    await this.connectGoogleCalendar();
-                } else if (error.status === 403) {
-                    alert('Permission denied. Please make sure you have granted calendar access.');
-                } else {
-                    alert('Failed to add activity to Google Calendar. Error: ' + (error.message || 'Unknown error'));
+                    console.error('Error initializing Google API client:', error);
+                    resolve();
                 }
+            });
+        });
+    } catch (error) {
+        console.error('Error in initGoogleCalendar:', error);
+    }
+}
+
+// Replace the connectGoogleCalendar function
+async connectGoogleCalendar() {
+    if (!this.tokenClient) {
+        alert('Google Calendar integration is not properly configured.');
+        return;
+    }
+
+    try {
+        // Request an access token
+        this.tokenClient.requestAccessToken({prompt: 'consent'});
+    } catch (error) {
+        console.error('Error requesting access token:', error);
+        alert('Failed to connect to Google Calendar. Please try again.');
+    }
+}
+
+// Replace the disconnectGoogleCalendar function
+async disconnectGoogleCalendar() {
+    if (this.accessToken) {
+        google.accounts.oauth2.revoke(this.accessToken, () => {
+            this.accessToken = null;
+            this.state.googleCalendarConnected = false;
+            console.log('Disconnected from Google Calendar');
+            this.render();
+        });
+    }
+}
+
+    // Update the addToGoogleCalendar function to use the access token
+async addToGoogleCalendar(activity) {
+    if (!this.state.googleCalendarConnected || !this.accessToken) {
+        if (confirm('Connect to Google Calendar to sync this activity?')) {
+            await this.connectGoogleCalendar();
+            // Wait a bit for the connection to complete
+            setTimeout(() => {
+                if (this.state.googleCalendarConnected) {
+                    this.addToGoogleCalendar(activity);
                 }
+            }, 1000);
+            return;
+        } else {
+            return;
+        }
+    }
+
+    // Set the access token for the API client
+    gapi.client.setToken({
+        access_token: this.accessToken
+    });
+
+    const customer = this.state.customers.find(c => c.id === activity.customerId);
+
+    // Convert time to RFC3339 format
+    const startTime = this.convertTo24Hour(activity.time);
+    const endTime = this.addHour(startTime);
+
+    // Get user's timezone
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    const event = {
+        summary: activity.subject,
+        description: `${activity.notes || ''}\n\nCustomer: ${customer?.name || 'Unknown'}\nType: ${activity.type}`,
+        start: {
+            dateTime: `${activity.date}T${startTime}:00`,
+            timeZone: timeZone
+        },
+        end: {
+            dateTime: `${activity.date}T${endTime}:00`,
+            timeZone: timeZone
+        },
+        reminders: {
+            useDefault: false,
+            overrides: [
+                {method: 'popup', minutes: 30},
+                {method: 'email', minutes: 60}
+            ]
+        }
+    };
+
+    try {
+        const response = await gapi.client.calendar.events.insert({
+            calendarId: 'primary',
+            resource: event
+        });
+
+        if (response.status === 200 || response.result) {
+            activity.googleCalendarId = response.result.id;
+            activity.googleCalendarLink = response.result.htmlLink;
+            
+            this.saveAllToLocalStorage();
+            
+            if (this.state.firebaseDb && this.state.isOnline) {
+                await this.state.firebaseDb.ref(`activities/${activity.id}`).set(activity);
             }
+
+            alert('Activity added to Google Calendar!');
+            this.render();
+        } else {
+            throw new Error('Failed to create calendar event');
+        }
+    } catch (error) {
+        console.error('Error adding to Google Calendar:', error);
+        if (error.status === 401) {
+            // Token expired, need to re-authenticate
+            this.state.googleCalendarConnected = false;
+            this.accessToken = null;
+            alert('Your Google session has expired. Please reconnect.');
+            await this.connectGoogleCalendar();
+        } else if (error.status === 403) {
+            alert('Permission denied. Please make sure you have granted calendar access.');
+        } else {
+            alert('Failed to add activity to Google Calendar. Error: ' + (error.message || 'Unknown error'));
+        }
+    }
+}
+
+// Move these methods out as class methods
+convertTo24Hour(time12h) {
+    const [time, modifier] = time12h.split(' ');
+    let [hours, minutes] = time.split(':');
+    if (hours === '12') {
+        hours = '00';
+    }
+    if (modifier === 'PM') {
+        hours = parseInt(hours, 10) + 12;
+    }
+    return `${hours.toString().padStart(2, '0')}:${minutes}`;
+}
+
+addHour(time24h) {
+    let [hours, minutes] = time24h.split(':');
+    hours = (parseInt(hours, 10) + 1) % 24;
+    return `${hours.toString().padStart(2, '0')}:${minutes}`;
+}
 
             loadFromLocalStorage() {
                 try {
