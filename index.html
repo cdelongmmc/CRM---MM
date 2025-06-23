@@ -5,23 +5,44 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Major Metals CRM</title>
     
-    <!-- Content Security Policy - MOVED TO HEAD -->
+    <!-- Updated Content Security Policy with WebSocket support and additional Google domains -->
     <meta http-equiv="Content-Security-Policy" content="
         default-src 'self';
         script-src 'self' 'unsafe-inline' 'unsafe-eval'
             https://cdn.tailwindcss.com
             https://www.gstatic.com/
             https://apis.google.com/
-            https://accounts.google.com/;
+            https://accounts.google.com/
+            https://www.googleapis.com/
+            https://securetoken.googleapis.com/
+            https://www.google.com/
+            https://www.googletagmanager.com/;
         connect-src 'self'
             https://*.googleapis.com
             https://*.google.com
             https://*.firebaseio.com
+            https://*.firebaseapp.com
+            wss://*.firebaseio.com
+            https://securetoken.googleapis.com/
+            https://www.googleapis.com/
+            https://accounts.google.com/;
+        frame-src 
+            https://accounts.google.com/ 
+            https://apis.google.com/
+            https://content.googleapis.com/
+            https://www.google.com/
+            https://securetoken.googleapis.com/
             https://*.firebaseapp.com;
-        frame-src https://accounts.google.com/ https://apis.google.com/;
-        style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com;
-        img-src 'self' data: https: blob:;
-        font-src 'self' data:;
+        style-src 'self' 'unsafe-inline' 
+            https://cdn.tailwindcss.com
+            https://accounts.google.com/
+            https://www.googleapis.com/;
+        img-src 'self' data: https: blob: 
+            https://*.googleusercontent.com
+            https://*.google.com
+            https://*.gstatic.com;
+        font-src 'self' data: 
+            https://fonts.gstatic.com;
     ">
     
     <script src="https://cdn.tailwindcss.com"></script>
@@ -127,7 +148,7 @@
 <body>
     <div id="app"></div>
 
-    <!-- Google API Script - CHANGED TO CORRECT SCRIPT -->
+    <!-- Google API Script -->
     <script src="https://apis.google.com/js/api.js"></script>
 
     <script>
