@@ -286,59 +286,66 @@
                 });
             }
 
-            // Google Calendar Integration
             async initGoogleCalendar() {
-                if (!GOOGLE_CONFIG.clientId || GOOGLE_CONFIG.clientId.includes('YOUR_GOOGLE_CLIENT_ID')) {
-                    console.log('Google Calendar integration not configured');
-                    return;
+                if (
+                !GOOGLE_CONFIG.clientId ||
+                GOOGLE_CONFIG.clientId.includes('YOUR_GOOGLE_CLIENT_ID')
+                ) {
+                console.log('Google Calendar integration not configured');
+                return;
                 }
 
                 return new Promise((resolve) => {
-                    gapi.load('client:auth2', async () => {
-                        try {
-                            await gapi.client.init({
-                                apiKey: GOOGLE_CONFIG.apiKey,
-                                clientId: GOOGLE_CONFIG.clientId,
-                                discoveryDocs: GOOGLE_CONFIG.discoveryDocs,
-                                scope: GOOGLE_CONFIG.scope
-                            });
-
-                            this.state.googleAuth = gapi.auth2.getAuthInstance();
-                            
-                            // Listen for sign-in state changes
-                            this.state.googleAuth.isSignedIn.listen((isSignedIn) => {
-                                this.state.googleCalendarConnected = isSignedIn;
-                                if (isSignedIn) {
-                                    console.log('Google Calendar connected successfully');
-                                }
-                                this.render();
-                            });
-
-                            // Handle initial sign-in state
-                            this.state.googleCalendarConnected = this.state.googleAuth.isSignedIn.get();
-                            
-                            // Check if we have necessary permissions
-                            if (this.state.googleCalendarConnected) {
-                                const user = this.state.googleAuth.currentUser.get();
-                                const hasCalendarScope = user.hasGrantedScopes(GOOGLE_CONFIG.scope);
-                                if (!hasCalendarScope) {
-                                    console.log('Calendar scope not granted, requesting...');
-                                    await this.state.googleAuth.signIn({scope: GOOGLE_CONFIG.scope});
-                                }
-                            }
-                            
-                            resolve();
-                        } catch (error) {
-                            console.error('Error initializing Google Calendar:', error);
-                            resolve();
-                        }
+                gapi.load('client:auth2', async () => {
+                    try {
+                    await gapi.client.init({
+                        apiKey: GOOGLE_CONFIG.apiKey,
+                        clientId: GOOGLE_CONFIG.clientId,
+                        discoveryDocs: GOOGLE_CONFIG.discoveryDocs,
+                        scope: GOOGLE_CONFIG.scope
                     });
+
+                    // ✅ Load Calendar API explicitly
+                    await gapi.client.load('calendar', 'v3');
+
+                    this.state.googleAuth = gapi.auth2.getAuthInstance();
+
+                    // Listen for sign-in state changes
+                    this.state.googleAuth.isSignedIn.listen((isSignedIn) => {
+                        this.state.googleCalendarConnected = isSignedIn;
+                        if (isSignedIn) {
+                        console.log('Google Calendar connected successfully');
+                        }
+                        this.render();
+                    });
+
+                    // Handle initial sign-in state
+                    this.state.googleCalendarConnected = this.state.googleAuth.isSignedIn.get();
+
+                    // Check if we have necessary permissions
+                    if (this.state.googleCalendarConnected) {
+                        const user = this.state.googleAuth.currentUser.get();
+                        const hasCalendarScope = user.hasGrantedScopes(GOOGLE_CONFIG.scope);
+                        if (!hasCalendarScope) {
+                        console.log('Calendar scope not granted, requesting...');
+                        await this.state.googleAuth.signIn({ scope: GOOGLE_CONFIG.scope });
+                        }
+                    }
+
+                    resolve();
+                    } catch (error) {
+                    console.error('Error initializing Google Calendar:', error);
+                    resolve();
+                    }
+                });
                 });
             }
 
+
             async connectGoogleCalendar() {
-                if (!this.state.googleAuth) {
-                    alert('Google Calendar integration is not properly configured.');
+                <button onclick="app.connectGoogleCalendar()">Connect Google Calendar</button>
+                if (this.state.googleCalendarConnected) {
+                    console.log('Already connected to Google Calendar');
                     return;
                 }
 
