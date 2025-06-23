@@ -126,7 +126,7 @@
         // Google Calendar configuration
         const GOOGLE_CONFIG = {
             clientId: '321138365753-d9gndqf1mliep73f58g36p0hvj21frcp.apps.googleusercontent.com',
-            apiKey: 'AIzaSyBFaW2SnV1c9OBcgh5P70KAE2tJGYK_uXE',
+            apiKey: 'AIzaSyBFsW2Snv1c9OBcgh5P70KAEZ1JGYK_uXE',
             scope: 'https://www.googleapis.com/auth/calendar.events',
             discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest']
         };
@@ -287,56 +287,71 @@
                 });
             }
 
-            // Replace the initGoogleCalendar function
             async initGoogleCalendar() {
+                console.log('Starting Google Calendar initialization...');
+                console.log('Config:', GOOGLE_CONFIG);
+
                 if (!GOOGLE_CONFIG.clientId || GOOGLE_CONFIG.clientId.includes('YOUR_GOOGLE_CLIENT_ID')) {
-                console.log('Google Calendar integration not configured');
-                return;
+                    console.log('Google Calendar integration not configured');
+                    return;
                 }
 
-                // Wait for gapi to load
+                // Check if running from correct domain
+                console.log('Current origin:', window.location.origin);
+
                 if (!window.gapi) {
-                console.error('Google API script not loaded');
-                return;
+                    console.error('Google API script not loaded - check network tab');
+                    return;
                 }
 
                 return new Promise((resolve) => {
-                gapi.load('client:auth2', async () => {
-                    try {
-                    await gapi.client.init({
-                        apiKey: GOOGLE_CONFIG.apiKey,
-                        clientId: GOOGLE_CONFIG.clientId,
-                        discoveryDocs: GOOGLE_CONFIG.discoveryDocs,
-                        scope: GOOGLE_CONFIG.scope,
-                        plugin_name: 'Major Metals CRM' // Add this for newer auth
+                    gapi.load('client:auth2', async () => {
+                        try {
+                            console.log('Google API loaded, initializing client...');
+
+                            await gapi.client.init({
+                                apiKey: GOOGLE_CONFIG.apiKey,
+                                clientId: GOOGLE_CONFIG.clientId,
+                                discoveryDocs: GOOGLE_CONFIG.discoveryDocs,
+                                scope: GOOGLE_CONFIG.scope
+                            });
+
+                            console.log('Google client initialized successfully');
+
+                            this.state.googleAuth = gapi.auth2.getAuthInstance();
+
+                            if (!this.state.googleAuth) {
+                                console.error('Failed to get auth instance');
+                                resolve();
+                                return;
+                            }
+
+                            // Listen for sign-in state changes
+                            this.state.googleAuth.isSignedIn.listen((isSignedIn) => {
+                                this.state.googleCalendarConnected = isSignedIn;
+                                console.log('Google Calendar connection status changed:', isSignedIn);
+                                this.render();
+                            });
+
+                            // Handle initial sign-in state
+                            this.state.googleCalendarConnected = this.state.googleAuth.isSignedIn.get();
+                            console.log('Initial connection status:', this.state.googleCalendarConnected);
+
+                            resolve();
+                        } catch (error) {
+                            console.error('Error initializing Google Calendar:', error);
+                            console.error('Full error object:', JSON.stringify(error, null, 2));
+
+                            // Check specific error types
+                            if (error.error === 'idpiframe_initialization_failed') {
+                                console.error('Cookies/3rd party storage might be blocked');
+                            } else if (error.details) {
+                                console.error('Error details:', error.details);
+                            }
+
+                            resolve();
+                        }
                     });
-
-                    this.state.googleAuth = gapi.auth2.getAuthInstance();
-
-                    if (!this.state.googleAuth) {
-                        console.error('Failed to get auth instance');
-                        resolve();
-                        return;
-                    }
-
-                    // Listen for sign-in state changes
-                    this.state.googleAuth.isSignedIn.listen((isSignedIn) => {
-                        this.state.googleCalendarConnected = isSignedIn;
-                        console.log('Google Calendar connection status:', isSignedIn);
-                        this.render();
-                    });
-
-                    // Handle initial sign-in state
-                    this.state.googleCalendarConnected = this.state.googleAuth.isSignedIn.get();
-                    console.log('Initial Google Calendar connection status:', this.state.googleCalendarConnected);
-
-                    resolve();
-                    } catch (error) {
-                    console.error('Error initializing Google Calendar:', error);
-                    console.error('Error details:', error.details);
-                    resolve();
-                    }
-                });
                 });
             }
 
