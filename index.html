@@ -338,9 +338,9 @@ async initGoogleCalendar() {
         return;
     }
 
-    // Wait for the Google Identity Services to load
-    if (!window.google || !window.google.accounts) {
-        console.log('Waiting for Google Identity Services to load...');
+    // Wait for both Google Identity Services and Google API to load
+    if (!window.google || !window.google.accounts || !window.gapi) {
+        console.log('Waiting for Google libraries to load...');
         setTimeout(() => this.initGoogleCalendar(), 500);
         return;
     }
@@ -350,7 +350,7 @@ async initGoogleCalendar() {
         this.tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: GOOGLE_CONFIG.clientId,
             scope: GOOGLE_CONFIG.scope,
-            callback: (response) => {
+            callback: async (response) => {
                 if (response.error) {
                     console.error('Token error:', response);
                     return;
@@ -358,19 +358,30 @@ async initGoogleCalendar() {
                 
                 // Store the access token
                 this.accessToken = response.access_token;
-                this.state.googleCalendarConnected = true;
-                console.log('Google Calendar connected successfully');
-                this.render();
+                
+                // Set the token for the API client
+                gapi.client.setToken({
+                    access_token: response.access_token
+                });
+                
+                // Load the calendar API
+                try {
+                    await gapi.client.load('calendar', 'v3');
+                    this.state.googleCalendarConnected = true;
+                    console.log('Google Calendar connected and API loaded successfully');
+                    this.render();
+                } catch (error) {
+                    console.error('Error loading Calendar API:', error);
+                }
             }
         });
 
-        // Load the Google API client library
+        // Load and initialize the Google API client library
         return new Promise((resolve) => {
             gapi.load('client', async () => {
                 try {
                     await gapi.client.init({
-                        apiKey: GOOGLE_CONFIG.apiKey,
-                        discoveryDocs: GOOGLE_CONFIG.discoveryDocs
+                        apiKey: GOOGLE_CONFIG.apiKey
                     });
                     console.log('Google API client initialized');
                     resolve();
