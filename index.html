@@ -424,7 +424,7 @@ async disconnectGoogleCalendar() {
     }
 }
 
-    // Update the addToGoogleCalendar function to use the access token
+    // This is the ENHANCED addToGoogleCalendar function with all the new features:
 async addToGoogleCalendar(activity) {
     if (!this.state.googleCalendarConnected || !this.accessToken) {
         if (confirm('Connect to Google Calendar to sync this activity?')) {
@@ -441,12 +441,25 @@ async addToGoogleCalendar(activity) {
         }
     }
 
+    // Ensure the Calendar API is loaded
+    if (!gapi.client.calendar) {
+        try {
+            await gapi.client.load('calendar', 'v3');
+        } catch (error) {
+            console.error('Error loading Calendar API:', error);
+            alert('Failed to load Google Calendar API. Please try reconnecting.');
+            return;
+        }
+    }
+
     // Set the access token for the API client
     gapi.client.setToken({
         access_token: this.accessToken
     });
 
     const customer = this.state.customers.find(c => c.id === activity.customerId);
+    const opportunity = activity.opportunityId ? 
+        this.state.opportunities.find(o => o.id === activity.opportunityId) : null;
 
     // Convert time to RFC3339 format
     const startTime = this.convertTo24Hour(activity.time);
@@ -455,9 +468,61 @@ async addToGoogleCalendar(activity) {
     // Get user's timezone
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+    // Build rich description with all relevant CRM information
+    let description = '';
+    
+    // Add activity notes if present
+    if (activity.notes) {
+        description += `📝 Notes:\n${activity.notes}\n\n`;
+    }
+    
+    // Add customer details section
+    description += '👤 Customer Information:\n';
+    description += `• Company: ${customer?.name || 'Unknown'}\n`;
+    description += `• Contact: ${customer?.contact || 'N/A'}\n`;
+    description += `• Email: ${customer?.email || 'N/A'}\n`;
+    description += `• Phone: ${customer?.phone || 'N/A'}\n`;
+    description += `• Industry: ${customer?.industry || 'N/A'}\n`;
+    
+    // Add preferred contact method if available
+    if (customer?.preferredContact) {
+        description += `• Preferred Contact: ${customer.preferredContact}\n`;
+    }
+    
+    // Add products of interest if available
+    if (customer?.primaryProducts && customer.primaryProducts.length > 0) {
+        description += `• Products of Interest: ${customer.primaryProducts.join(', ')}\n`;
+    }
+    
+    // Add opportunity details if linked
+    if (opportunity) {
+        description += `\n💰 Opportunity Details:\n`;
+        description += `• Title: ${opportunity.title}\n`;
+        description += `• Value: $${(opportunity.value || 0).toLocaleString()}\n`;
+        description += `• Stage: ${this.pipelineStages.find(s => s.id === opportunity.stage)?.name || opportunity.stage}\n`;
+        description += `• Expected Close: ${opportunity.expectedClose || 'Not set'}\n`;
+    }
+    
+    // Add activity metadata
+    description += `\n📅 Activity Details:\n`;
+    description += `• Type: ${activity.type.charAt(0).toUpperCase() + activity.type.slice(1)}\n`;
+    description += `• Pipeline Stage: ${this.customerStages.find(s => s.id === activity.pipelineStage)?.name || activity.pipelineStage}\n`;
+    
+    // Add footer
+    description += '\n---\n🔧 Created from Major Metals CRM';
+
+    // Map CRM activity fields to Google Calendar event fields
     const event = {
-        summary: activity.subject,
-        description: `${activity.notes || ''}\n\nCustomer: ${customer?.name || 'Unknown'}\nType: ${activity.type}`,
+        // 'summary' is the event title in Google Calendar - NOW includes customer name
+        summary: `${activity.subject} - ${customer?.name || 'Unknown Customer'}`,
+        
+        // 'description' is the event body/notes with rich formatting
+        description: description,
+        
+        // Location - add company address if available, otherwise company name
+        location: customer?.address || customer?.name || '',
+        
+        // Start and end times
         start: {
             dateTime: `${activity.date}T${startTime}:00`,
             timeZone: timeZone
@@ -466,24 +531,67 @@ async addToGoogleCalendar(activity) {
             dateTime: `${activity.date}T${endTime}:00`,
             timeZone: timeZone
         },
+        
+        // Set reminders based on activity type
         reminders: {
             useDefault: false,
-            overrides: [
+            overrides: activity.type === 'meeting' ? [
+                {method: 'popup', minutes: 60},
+                {method: 'email', minutes: 1440} // 24 hours
+            ] : [
                 {method: 'popup', minutes: 30},
                 {method: 'email', minutes: 60}
             ]
-        }
+        },
+        
+        // Add attendees if we have customer email
+        attendees: customer?.email ? [
+            {
+                email: customer.email, 
+                displayName: customer.contact || customer.name,
+                optional: false  // Make them required attendee
+            }
+        ] : [],
+        
+        // Color coding based on activity type
+        // Google Calendar color IDs: https://developers.google.com/calendar/api/v3/reference/colors
+        colorId: activity.type === 'call' ? '2' : // Bold green for calls
+                 activity.type === 'meeting' ? '5' : // Bold yellow for meetings  
+                 activity.type === 'email' ? '7' : // Bold blue for emails
+                 '1', // Default blue for others
+        
+        // Add conference data for meetings if needed
+        conferenceData: activity.type === 'meeting' ? {
+            createRequest: {
+                requestId: `crm-${activity.id}`,
+                conferenceSolutionKey: {
+                    type: 'hangoutsMeet'
+                }
+            }
+        } : undefined
     };
 
+    // Include conference data in the request if it's a meeting
+    const requestParams = {
+        calendarId: 'primary',
+        resource: event
+    };
+    
+    if (activity.type === 'meeting') {
+        requestParams.conferenceDataVersion = 1;
+    }
+
     try {
-        const response = await gapi.client.calendar.events.insert({
-            calendarId: 'primary',
-            resource: event
-        });
+        const response = await gapi.client.calendar.events.insert(requestParams);
 
         if (response.status === 200 || response.result) {
             activity.googleCalendarId = response.result.id;
             activity.googleCalendarLink = response.result.htmlLink;
+            
+            // Store conference link if created
+            if (response.result.conferenceData && response.result.conferenceData.entryPoints) {
+                activity.meetingLink = response.result.conferenceData.entryPoints[0].uri;
+            }
             
             this.saveAllToLocalStorage();
             
@@ -586,7 +694,7 @@ addHour(time24h) {
                                 type: 'email',
                                 subject: 'Quote sent for Q1 order',
                                 date: new Date().toISOString().split('T')[0],
-                                time: '10:00 AM',
+                                time: '2:00 PM',
                                 notes: 'Sent detailed quote with volume pricing. Customer seemed interested in the bulk discount options.',
                                 completed: true,
                                 pipelineStage: 'quote_out',
