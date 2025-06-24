@@ -333,6 +333,8 @@
 
 // Replace the initGoogleCalendar function
 async initGoogleCalendar() {
+    console.log('Initializing Google Calendar integration...');
+    
     if (!GOOGLE_CONFIG.clientId || GOOGLE_CONFIG.clientId.includes('YOUR_GOOGLE_CLIENT_ID')) {
         console.log('Google Calendar integration not configured');
         return;
@@ -351,33 +353,82 @@ async initGoogleCalendar() {
             client_id: GOOGLE_CONFIG.clientId,
             scope: GOOGLE_CONFIG.scope,
             callback: async (response) => {
+                console.log('Token callback received:', response);
+                
                 if (response.error) {
                     console.error('Token error:', response);
+                    alert(`Authentication error: ${response.error}`);
+                    return;
+                }
+                
+                if (!response.access_token) {
+                    console.error('No access token received');
+                    alert('Authentication failed: No access token received');
                     return;
                 }
                 
                 // Store the access token
                 this.accessToken = response.access_token;
+                console.log('Access token stored successfully');
+                
+                // Store in localStorage for persistence
+                localStorage.setItem('googleAccessToken', response.access_token);
+                localStorage.setItem('googleCalendarConnected', 'true');
                 
                 // Set the token for the API client
                 gapi.client.setToken({
                     access_token: response.access_token
                 });
                 
-                // Load the calendar API
+                // Try to set connected status immediately to update UI
+                this.state.googleCalendarConnected = true;
+                this.render();
+                
+                // Then load the calendar API
                 try {
+                    console.log('Loading Google Calendar API...');
                     await gapi.client.load('calendar', 'v3');
-                    this.state.googleCalendarConnected = true;
-                    console.log('Google Calendar connected and API loaded successfully');
-                    this.render();
+                    console.log('Google Calendar API loaded successfully');
+                    
+                    // Test the connection by fetching calendar list
+                    try {
+                        const response = await gapi.client.calendar.calendarList.list({
+                            minAccessRole: 'writer'
+                        });
+                        console.log('Calendar access verified:', response);
+                        
+                        // Show success message
+                        alert('Successfully connected to Google Calendar!');
+                    } catch (testError) {
+                        console.error('Calendar access test failed:', testError);
+                    }
+                    
                 } catch (error) {
                     console.error('Error loading Calendar API:', error);
+                    alert('Failed to load Google Calendar API. You may need to reconnect.');
+                    this.state.googleCalendarConnected = false;
+                    this.accessToken = null;
+                    localStorage.removeItem('googleCalendarConnected');
+                    localStorage.removeItem('googleAccessToken');
+                    this.render();
                 }
+            },
+            error_callback: (error) => {
+                console.error('OAuth error:', error);
+                alert(`Authentication failed: ${error.type || 'Unknown error'}`);
             }
         });
 
+        console.log('Token client initialized');
+
         // Load and initialize the Google API client library
         return new Promise((resolve) => {
+            if (gapi.client) {
+                console.log('Google API client already loaded');
+                resolve();
+                return;
+            }
+            
             gapi.load('client', async () => {
                 try {
                     await gapi.client.init({
@@ -393,6 +444,7 @@ async initGoogleCalendar() {
         });
     } catch (error) {
         console.error('Error in initGoogleCalendar:', error);
+        alert('Failed to initialize Google Calendar integration');
     }
 }
 
