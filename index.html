@@ -226,6 +226,8 @@
                 globalSearchResults: null,
                 activityFilter: 'all',
                 industryFilter: 'all',
+                pipelineFilter: 'all',
+                statusFilter: 'all',
                 showFollowUp: null,
                 isOnline: navigator.onLine,
                 isSyncing: false,
@@ -1745,6 +1747,16 @@ addHour(time24h) {
                 this.render();
             }
 
+            updatePipelineFilter(value) {
+                this.state.pipelineFilter = value;
+                this.render();
+            }
+
+            updateStatusFilter(value) {
+                this.state.statusFilter = value;
+                this.render();
+            }
+
             updateActivityFilter(value) {
                 this.state.activityFilter = value;
                 this.render();
@@ -2232,7 +2244,9 @@ addHour(time24h) {
                 const filteredCustomers = this.state.customers.filter(c => {
                     const matchesSearch = c.name.toLowerCase().includes(this.state.searchTerm.toLowerCase());
                     const matchesIndustry = this.state.industryFilter === 'all' || c.industry === this.state.industryFilter;
-                    return matchesSearch && matchesIndustry;
+                    const matchesPipeline = this.state.pipelineFilter === 'all' || c.pipelineStage === this.state.pipelineFilter;
+                    const matchesStatus = this.state.statusFilter === 'all' || c.status === this.state.statusFilter;
+                    return matchesSearch && matchesIndustry && matchesPipeline && matchesStatus;
                 });
 
                 return `
@@ -2617,194 +2631,277 @@ addHour(time24h) {
                     </div>
                 `;
             }
+            renderActivityCard(activity, isOverdue = false, isCompleted = false) {
+                const customer = this.state.customers.find(c => c.id === activity.customerId);
+                const pipelineStage = this.customerStages.find(s => s.id === activity.pipelineStage);
+                const customerStatus = customer?.status || 'unknown';
 
+                return `
+                    <div class="border rounded-lg p-4 ${isOverdue ? 'bg-white border-red-200' : isCompleted ? 'bg-gray-50' : 'bg-white hover:shadow-sm transition-shadow'}">
+                        <div class="flex items-start justify-between">
+                            <div class="${isCompleted ? 'cursor-pointer' : ''}" 
+                                 ${isCompleted ? `onclick="app.viewActivity('${activity.id}')"` : ''}>
+                                <h4 class="font-medium ${isCompleted ? 'line-through text-gray-500' : ''}">${activity.subject}</h4>
+                                <p class="text-sm text-gray-600">${customer?.name || 'Unknown'}</p>
+                                <p class="text-sm ${isOverdue ? 'text-red-600' : 'text-gray-500'}">${activity.date} at ${activity.time}</p>
+                                <div class="flex items-center gap-2 mt-2">
+                                    ${pipelineStage ? `
+                                        <span class="inline-flex items-center px-2 py-1 text-xs rounded-full text-white ${pipelineStage.color}">
+                                            ${pipelineStage.name}
+                                        </span>
+                                    ` : ''}
+                                    <span class="inline-flex items-center px-2 py-1 text-xs rounded-full ${
+                                        customerStatus === 'active' ? 'bg-green-100 text-green-800' : 
+                                        customerStatus === 'prospect' ? 'bg-blue-100 text-blue-800' : 
+                                        customerStatus === 'inactive' ? 'bg-gray-100 text-gray-800' : 
+                                        'bg-gray-100 text-gray-600'
+                                    }">
+                                        ${customerStatus}
+                                    </span>
+                                    ${activity.googleCalendarId ? `
+                                        <span class="inline-flex items-center text-xs text-green-600">
+                                            ${this.icon('Calendar', 12, 'inline')} Synced
+                                        </span>
+                                    ` : ''}
+                                </div>
+                                ${activity.notes ? `
+                                    <p class="text-xs text-gray-500 mt-2 line-clamp-2">${activity.notes}</p>
+                                ` : ''}
+                                ${activity.audioRecording ? `
+                                    <div class="mt-2">
+                                        <audio controls class="w-full h-8" onclick="event.stopPropagation()">
+                                            <source src="${activity.audioRecording.url || activity.audioRecording.localData}" 
+                                                    type="${activity.audioRecording.mimeType || 'audio/webm'}">
+                                        </audio>
+                                        <p class="text-xs text-gray-400">
+                                            Audio (${Math.floor(activity.audioRecording.duration / 60)}:${(activity.audioRecording.duration % 60).toString().padStart(2, '0')})
+                                        </p>
+                                    </div>
+                                ` : ''}
+                            </div>
+                            ${!isCompleted ? `
+                                <div class="flex items-center space-x-2">
+                                    <button onclick="app.markActivityComplete('${activity.id}')"
+                                            class="text-green-600 hover:text-green-800" title="Mark Complete">
+                                        ${this.icon('Check', 20)}
+                                    </button>
+                                    <button onclick="app.editActivity('${activity.id}')"
+                                            class="text-blue-600 hover:text-blue-800" title="Edit">
+                                        ${this.icon('Edit2', 16)}
+                                    </button>
+                                    <button onclick="app.deleteActivity('${activity.id}')"
+                                            class="text-red-600 hover:text-red-800" title="Delete">
+                                        ${this.icon('Trash2', 16)}
+                                    </button>
+                                </div>
+                            ` : `
+                                <button onclick="app.viewActivity('${activity.id}')"
+                                        class="text-blue-600 hover:text-blue-800 p-2" title="View Details">
+                                    ${this.icon('Eye', 16)}
+                                </button>
+                            `}
+                        </div>
+                    </div>
+                `;
+            }
             renderActivities() {
                 const today = new Date().toISOString().split('T')[0];
-                
+                const thisWeekEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                const nextWeekStart = new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                const nextWeekEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+                // Apply filters
                 const filteredActivities = this.state.activities.filter(activity => {
-                    if (this.state.activityFilter === 'all') return true;
-                    if (this.state.activityFilter === 'overdue') return !activity.completed && activity.date < today;
-                    if (this.state.activityFilter === 'today') return activity.date === today;
-                    if (this.state.activityFilter === 'upcoming') return !activity.completed && activity.date >= today;
+                if (this.state.activityFilter === 'all') return true;
+                if (this.state.activityFilter === 'overdue') return !activity.completed && activity.date < today;
+                if (this.state.activityFilter === 'today') return activity.date === today;
+                if (this.state.activityFilter === 'upcoming') return !activity.completed && activity.date >= today;
+                if (this.customerStages.find(s => s.id === this.state.activityFilter)) {
                     return activity.pipelineStage === this.state.activityFilter;
+                }
+
+                // Status filter
+                const customer = this.state.customers.find(c => c.id === activity.customerId);
+                if (this.state.activityFilter === 'status-active') return customer?.status === 'active';
+                if (this.state.activityFilter === 'status-prospect') return customer?.status === 'prospect';
+                if (this.state.activityFilter === 'status-inactive') return customer?.status === 'inactive';
+
+                return true;
                 });
 
-                const upcomingActivities = filteredActivities.filter(a => !a.completed && a.date >= today);
+                // Group activities by time period
+                const todayActivities = filteredActivities.filter(a => !a.completed && a.date === today);
+                const thisWeekActivities = filteredActivities.filter(a => !a.completed && a.date > today && a.date <= thisWeekEnd);
+                const nextWeekActivities = filteredActivities.filter(a => !a.completed && a.date >= nextWeekStart && a.date <= nextWeekEnd);
                 const overdueActivities = filteredActivities.filter(a => !a.completed && a.date < today);
                 const completedActivities = filteredActivities.filter(a => a.completed);
 
                 return `
-                    <div class="p-4 lg:p-8 mt-16 lg:mt-0">
-                        <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 lg:mb-8 space-y-4 sm:space-y-0">
-                            <h2 class="text-2xl lg:text-3xl font-bold">Activities & Follow-ups</h2>
-                            <div class="flex flex-col sm:flex-row sm:items-center space-y-4 sm:space-y-0 sm:space-x-4">
-                                <select onchange="app.updateActivityFilter(this.value)"
-                                        class="px-4 py-2 border rounded-lg">
-                                    <option value="all">All Activities</option>
-                                    <option value="today">Today</option>
-                                    <option value="upcoming">Upcoming</option>
-                                    <option value="overdue">Overdue</option>
-                                </select>
-                                <button onclick="app.openModal('activity')"
-                                        class="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
-                                    ${this.icon('Plus', 20)}
-                                    <span>Schedule Activity</span>
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
-                            <div class="lg:col-span-2 space-y-4">
-                                ${overdueActivities.length > 0 ? `
-                                    <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                                        <h3 class="text-lg font-semibold text-red-800 mb-3">
-                                            ${this.icon('AlertCircle', 20, 'inline mr-2')}
-                                            Overdue (${overdueActivities.length})
-                                        </h3>
-                                        <div class="space-y-2">
-                                            ${overdueActivities.map(activity => {
-                                                const customer = this.state.customers.find(c => c.id === activity.customerId);
-                                                return `
-                                                    <div class="bg-white p-4 rounded-lg border border-red-200">
-                                                        <div class="flex items-start justify-between">
-                                                            <div>
-                                                                <h4 class="font-medium">${activity.subject}</h4>
-                                                                <p class="text-sm text-gray-600">${customer?.name || 'Unknown'}</p>
-                                                                <p class="text-sm text-red-600">Due: ${activity.date}</p>
-                                                            </div>
-                                                            <div class="flex items-center space-x-2">
-                                                                <button onclick="app.markActivityComplete('${activity.id}')"
-                                                                        class="text-green-600 hover:text-green-800">
-                                                                    ${this.icon('Check', 20)}
-                                                                </button>
-                                                                <button onclick="app.editActivity('${activity.id}')"
-                                                                        class="text-blue-600 hover:text-blue-800">
-                                                                    ${this.icon('Edit2', 16)}
-                                                                </button>
-                                                                <button onclick="app.deleteActivity('${activity.id}')"
-                                                                        class="text-red-600 hover:text-red-800">
-                                                                    ${this.icon('Trash2', 16)}
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                `;
-                                            }).join('')}
-                                        </div>
-                                    </div>
-                                ` : ''}
-                                
-                                <div class="bg-white rounded-lg shadow">
-                                    <div class="p-4 border-b flex justify-between items-center">
-                                        <h3 class="text-lg font-semibold">Upcoming Activities</h3>
-                                        <button onclick="app.toggleShowCompletedActivities()"
-                                                class="text-sm text-blue-600 hover:text-blue-800">
-                                            ${this.state.showCompletedActivities ? 'Hide' : 'Show'} Completed
-                                        </button>
-                                    </div>
-                                    <div class="p-4">
-                                        <div class="space-y-3">
-                                            ${(this.state.showCompletedActivities ? filteredActivities : upcomingActivities).map(activity => {
-                                                const customer = this.state.customers.find(c => c.id === activity.customerId);
-                                                return `
-                                                    <div class="border rounded-lg p-4 ${activity.completed ? 'bg-gray-50' : ''}">
-                                                        <div class="flex items-start justify-between">
-                                                            <div class="${activity.completed ? 'cursor-pointer' : ''}" 
-                                                                 ${activity.completed ? `onclick="app.viewActivity('${activity.id}')"` : ''}>
-                                                                <h4 class="font-medium ${activity.completed ? 'line-through' : ''}">${activity.subject}</h4>
-                                                                <p class="text-sm text-gray-600">${customer?.name || 'Unknown'}</p>
-                                                                <p class="text-sm text-gray-500">${activity.date} at ${activity.time}</p>
-                                                                ${activity.googleCalendarId ? `
-                                                                    <p class="text-xs text-green-600 mt-1">
-                                                                        ${this.icon('Calendar', 12, 'inline')} Synced to Google Calendar
-                                                                    </p>
-                                                                ` : ''}
-                                                                ${activity.audioRecording ? `
-                                                                    <audio controls class="mt-2 w-full">
-                                                                        <source src="${activity.audioRecording.url || activity.audioRecording.localData}" 
-                                                                                type="${activity.audioRecording.mimeType || 'audio/webm'}">
-                                                                        Your browser does not support the audio element.
-                                                                    </audio>
-                                                                    <p class="text-xs text-gray-500 mt-1">
-                                                                        Duration: ${Math.floor(activity.audioRecording.duration / 60)}:${(activity.audioRecording.duration % 60).toString().padStart(2, '0')}
-                                                                    </p>
-                                                                ` : ''}
-                                                            </div>
-                                                            ${!activity.completed ? `
-                                                                <div class="flex items-center space-x-2">
-                                                                    <button onclick="app.markActivityComplete('${activity.id}')"
-                                                                            class="text-green-600 hover:text-green-800">
-                                                                        ${this.icon('Check', 20)}
-                                                                    </button>
-                                                                    <button onclick="app.editActivity('${activity.id}')"
-                                                                            class="text-blue-600 hover:text-blue-800">
-                                                                        ${this.icon('Edit2', 16)}
-                                                                    </button>
-                                                                    <button onclick="app.deleteActivity('${activity.id}')"
-                                                                            class="text-red-600 hover:text-red-800">
-                                                                        ${this.icon('Trash2', 16)}
-                                                                    </button>
-                                                                </div>
-                                                            ` : `
-                                                                <button onclick="app.viewActivity('${activity.id}')"
-                                                                        class="text-blue-600 hover:text-blue-800 p-2">
-                                                                    ${this.icon('Eye', 16)}
-                                                                </button>
-                                                            `}
-                                                        </div>
-                                                    </div>
-                                                `;
-                                            }).join('')}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="space-y-4">
-                                <div class="bg-white rounded-lg shadow p-4">
-                                    <h3 class="text-lg font-semibold mb-4">Google Calendar</h3>
-                                    ${this.state.googleCalendarConnected ? `
-                                        <p class="text-sm text-green-600 mb-4">
-                                            ${this.icon('Check', 16, 'inline')} Connected
-                                        </p>
-                                        <p class="text-xs text-gray-500 mb-4">Activities will sync automatically</p>
-                                        <button onclick="app.disconnectGoogleCalendar()"
-                                                class="w-full bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
-                                            Disconnect
-                                        </button>
-                                    ` : `
-                                        <p class="text-sm text-gray-600 mb-4">Connect to sync activities</p>
-                                        <button onclick="app.connectGoogleCalendar()"
-                                                class="w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                                            Connect Google Calendar
-                                        </button>
-                                    `}
-                                </div>
-                                
-                                <div class="bg-white rounded-lg shadow p-4">
-                                    <h3 class="text-lg font-semibold mb-4">Activity Summary</h3>
-                                    <div class="space-y-3">
-                                        <div class="flex justify-between">
-                                            <span class="text-gray-600">Today</span>
-                                            <span class="font-semibold">
-                                                ${this.state.activities.filter(a => a.date === today && !a.completed).length}
-                                            </span>
-                                        </div>
-                                        <div class="flex justify-between">
-                                            <span class="text-gray-600">Overdue</span>
-                                            <span class="font-semibold text-red-600">${overdueActivities.length}</span>
-                                        </div>
-                                        <div class="flex justify-between">
-                                            <span class="text-gray-600">Completed</span>
-                                            <span class="font-semibold text-green-600">${completedActivities.length}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        ${this.renderFollowUpModal()}
+                <div class="p-4 lg:p-8 mt-16 lg:mt-0">
+                    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 lg:mb-8 space-y-4 sm:space-y-0">
+                    <h2 class="text-2xl lg:text-3xl font-bold">Activities & Follow-ups</h2>
+                    <div class="flex flex-col sm:flex-row sm:items-center space-y-4 sm:space-y-0 sm:space-x-4">
+                        <select onchange="app.updateActivityFilter(this.value)"
+                            class="px-4 py-2 border rounded-lg">
+                        <option value="all">All Activities</option>
+                        <optgroup label="Time">
+                            <option value="today">Today</option>
+                            <option value="upcoming">Upcoming</option>
+                            <option value="overdue">Overdue</option>
+                        </optgroup>
+                        <optgroup label="Pipeline Stage">
+                            ${this.customerStages.map(stage => `
+                            <option value="${stage.id}">${stage.name}</option>
+                            `).join('')}
+                        </optgroup>
+                        <optgroup label="Customer Status">
+                            <option value="status-active">Active Customers</option>
+                            <option value="status-prospect">Prospects</option>
+                            <option value="status-inactive">Inactive</option>
+                        </optgroup>
+                        </select>
+                        <button onclick="app.openModal('activity')"
+                            class="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                        ${this.icon('Plus', 20)}
+                        <span>Schedule Activity</span>
+                        </button>
                     </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
+                    <div class="lg:col-span-2 space-y-4">
+                        ${overdueActivities.length > 0 ? `
+                        <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                            <h3 class="text-lg font-semibold text-red-800 mb-3">
+                            ${this.icon('AlertCircle', 20, 'inline mr-2')}
+                            Overdue (${overdueActivities.length})
+                            </h3>
+                            <div class="space-y-2">
+                            ${overdueActivities.map(activity => this.renderActivityCard(activity, true)).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        ${todayActivities.length > 0 ? `
+                        <div class="bg-white rounded-lg shadow">
+                            <div class="p-4 border-b">
+                            <h3 class="text-lg font-semibold flex items-center">
+                                ${this.icon('Calendar', 20, 'inline mr-2 text-blue-600')}
+                                Today (${todayActivities.length})
+                            </h3>
+                            </div>
+                            <div class="p-4 space-y-3">
+                            ${todayActivities.map(activity => this.renderActivityCard(activity)).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        ${thisWeekActivities.length > 0 ? `
+                        <div class="bg-white rounded-lg shadow">
+                            <div class="p-4 border-b">
+                            <h3 class="text-lg font-semibold flex items-center">
+                                ${this.icon('Clock', 20, 'inline mr-2 text-purple-600')}
+                                This Week (${thisWeekActivities.length})
+                            </h3>
+                            </div>
+                            <div class="p-4 space-y-3">
+                            ${thisWeekActivities.map(activity => this.renderActivityCard(activity)).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        ${nextWeekActivities.length > 0 ? `
+                        <div class="bg-white rounded-lg shadow">
+                            <div class="p-4 border-b">
+                            <h3 class="text-lg font-semibold flex items-center">
+                                ${this.icon('TrendingUp', 20, 'inline mr-2 text-green-600')}
+                                Next Week (${nextWeekActivities.length})
+                            </h3>
+                            </div>
+                            <div class="p-4 space-y-3">
+                            ${nextWeekActivities.map(activity => this.renderActivityCard(activity)).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        ${this.state.showCompletedActivities && completedActivities.length > 0 ? `
+                        <div class="bg-gray-50 rounded-lg shadow">
+                            <div class="p-4 border-b flex justify-between items-center">
+                            <h3 class="text-lg font-semibold flex items-center text-gray-600">
+                                ${this.icon('Check', 20, 'inline mr-2 text-green-600')}
+                                Completed (${completedActivities.length})
+                            </h3>
+                            </div>
+                            <div class="p-4 space-y-3">
+                            ${completedActivities.slice(0, 10).map(activity => this.renderActivityCard(activity, false, true)).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        ${todayActivities.length === 0 && thisWeekActivities.length === 0 && nextWeekActivities.length === 0 && overdueActivities.length === 0 ? `
+                        <div class="bg-white rounded-lg shadow p-8 text-center">
+                            <p class="text-gray-500">No activities scheduled</p>
+                        </div>
+                        ` : ''}
+                    </div>
+
+                    <div class="space-y-4">
+                        <div class="bg-white rounded-lg shadow p-4">
+                        <h3 class="text-lg font-semibold mb-4">Google Calendar</h3>
+                        ${this.state.googleCalendarConnected ? `
+                            <p class="text-sm text-green-600 mb-4">
+                            ${this.icon('Check', 16, 'inline')} Connected
+                            </p>
+                            <p class="text-xs text-gray-500 mb-4">Activities will sync automatically</p>
+                            <button onclick="app.disconnectGoogleCalendar()"
+                                class="w-full bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
+                            Disconnect
+                            </button>
+                        ` : `
+                            <p class="text-sm text-gray-600 mb-4">Connect to sync activities</p>
+                            <button onclick="app.connectGoogleCalendar()"
+                                class="w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                            Connect Google Calendar
+                            </button>
+                        `}
+                        </div>
+
+                        <div class="bg-white rounded-lg shadow p-4">
+                        <h3 class="text-lg font-semibold mb-4">Activity Summary</h3>
+                        <div class="space-y-3">
+                            <div class="flex justify-between">
+                            <span class="text-gray-600">Today</span>
+                            <span class="font-semibold">
+                                ${todayActivities.length}
+                            </span>
+                            </div>
+                            <div class="flex justify-between">
+                            <span class="text-gray-600">This Week</span>
+                            <span class="font-semibold">
+                                ${thisWeekActivities.length}
+                            </span>
+                            </div>
+                            <div class="flex justify-between">
+                            <span class="text-gray-600">Overdue</span>
+                            <span class="font-semibold text-red-600">${overdueActivities.length}</span>
+                            </div>
+                            <div class="flex justify-between">
+                            <span class="text-gray-600">Completed</span>
+                            <span class="font-semibold text-green-600">${completedActivities.length}</span>
+                            </div>
+                        </div>
+                        <div class="mt-4 pt-4 border-t">
+                            <button onclick="app.toggleShowCompletedActivities()"
+                                class="w-full text-sm text-blue-600 hover:text-blue-800">
+                            ${this.state.showCompletedActivities ? 'Hide' : 'Show'} Completed Activities
+                            </button>
+                        </div>
+                        </div>
+                    </div>
+                    </div>
+
+                    ${this.renderFollowUpModal()}
+                </div>
                 `;
             }
             renderFollowUpModal() {
@@ -3620,7 +3717,18 @@ addHour(time24h) {
                                                   oninput="app.updateFormField('notes', this.value)"
                                                   class="w-full p-2 border rounded-lg"></textarea>
                                     </div>
-
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Pipeline Stage</label>
+                                        <select value="${this.state.formData.pipelineStage || ''}"
+                                                onchange="app.updateFormField('pipelineStage', this.value)"
+                                                class="w-full p-2 border rounded-lg">
+                                            ${this.customerStages.map(stage => `
+                                                <option value="${stage.id}" ${this.state.formData.pipelineStage === stage.id ? 'selected' : ''}>
+                                                    ${stage.name}
+                                                </option>
+                                            `).join('')}
+                                        </select>
+                                    </div>
                                     ${!isEditing ? `
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700 mb-1">Audio Note</label>
