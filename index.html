@@ -143,6 +143,26 @@
             font-size: 0.75rem;
             margin: 0.125rem;
         }
+
+        /* Contact section styles */
+        .contact-section {
+            background-color: #f9fafb;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .remove-contact-btn {
+            background-color: #ef4444;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+        }
+
+        .remove-contact-btn:hover {
+            background-color: #dc2626;
+        }
     </style>
 </head>
 <body>
@@ -560,9 +580,19 @@ async addToGoogleCalendar(activity) {
     // Add customer details section
     description += '👤 Customer Information:\n';
     description += `• Company: ${customer?.name || 'Unknown'}\n`;
-    description += `• Contact: ${customer?.contact || 'N/A'}\n`;
-    description += `• Email: ${customer?.email || 'N/A'}\n`;
-    description += `• Phone: ${customer?.phone || 'N/A'}\n`;
+    // Handle new contact structure
+    if (customer?.contacts && customer.contacts.length > 0) {
+        const primaryContact = customer.contacts[0];
+        description += `• Primary Contact: ${primaryContact.name || 'N/A'}\n`;
+        description += `• Email: ${primaryContact.email || 'N/A'}\n`;
+        description += `• Cell: ${primaryContact.cell || 'N/A'}\n`;
+        description += `• Office: ${customer.officeNumber || 'N/A'}\n`;
+    } else {
+        // Fallback for legacy data structure
+        description += `• Contact: ${customer?.contact || 'N/A'}\n`;
+        description += `• Email: ${customer?.email || 'N/A'}\n`;
+        description += `• Phone: ${customer?.phone || 'N/A'}\n`;
+    }
     description += `• Industry: ${customer?.industry || 'N/A'}\n`;
     
     // Add preferred contact method if available
@@ -626,13 +656,28 @@ async addToGoogleCalendar(activity) {
         },
         
         // Add attendees if we have customer email
-        attendees: customer?.email ? [
-            {
-                email: customer.email, 
-                displayName: customer.contact || customer.name,
-                optional: false  // Make them required attendee
+        attendees: (() => {
+            const attendees = [];
+            if (customer?.contacts && customer.contacts.length > 0) {
+                customer.contacts.forEach(contact => {
+                    if (contact.email) {
+                        attendees.push({
+                            email: contact.email,
+                            displayName: contact.name || customer.name,
+                            optional: false
+                        });
+                    }
+                });
+            } else if (customer?.email) {
+                // Fallback for legacy data
+                attendees.push({
+                    email: customer.email,
+                    displayName: customer.contact || customer.name,
+                    optional: false
+                });
             }
-        ] : [],
+            return attendees;
+        })(),
         
         // Color coding based on activity type
         // Google Calendar color IDs: https://developers.google.com/calendar/api/v3/reference/colors
@@ -727,19 +772,42 @@ addHour(time24h) {
                     const quotes = JSON.parse(localStorage.getItem('quotes') || '[]');
                     const activities = JSON.parse(localStorage.getItem('activities') || '[]');
 
+                    // Migrate existing customers to new contact structure if needed
+                    customers.forEach(customer => {
+                        if (customer.contact && !customer.contacts) {
+                            customer.contacts = [{
+                                name: customer.contact,
+                                email: customer.email,
+                                cell: customer.phone,
+                                title: ''
+                            }];
+                            // Keep old fields for backward compatibility temporarily
+                        }
+                    });
+
                     if (customers.length === 0 && opportunities.length === 0 && activities.length === 0) {
-                        // Initialize with sample data
+                        // Initialize with sample data (updated structure)
                         this.state.customers = [
                             {
                                 id: '1',
                                 name: 'Apex Construction Inc.',
                                 industry: 'Metal Buildings',
+                                officeNumber: '(555) 100-2000',
+                                contacts: [
+                                    {
+                                        name: 'John Davidson',
+                                        email: 'john@apexconstruction.com',
+                                        cell: '(555) 123-4567',
+                                        title: 'Owner'
+                                    }
+                                ],
+                                // Keep legacy fields for backward compatibility
                                 contact: 'John Davidson',
                                 email: 'john@apexconstruction.com',
                                 phone: '(555) 123-4567',
                                 status: 'active',
                                 pipelineStage: 'quote_out',
-                                companyBackground: 'Leading construction company specializing in commercial metal buildings. Founded in 1995, serving the tri-state area.',
+                                accountNotes: 'Leading construction company specializing in commercial metal buildings. Founded in 1995, serving the tri-state area.',
                                 productsUsed: 'Square tubing (2x2, 3x3), Round pipes (various diameters), Galvanized steel sheets',
                                 primaryProducts: ['Square Tubing - 2x2', 'Square Tubing - 3x3', 'Galvanized Products'],
                                 deliveryPreferences: 'Job site delivery required, 48-hour notice preferred',
@@ -1023,12 +1091,17 @@ addHour(time24h) {
             performGlobalSearch() {
                 const term = this.state.globalSearchTerm.toLowerCase();
                 const results = {
-                    customers: this.state.customers.filter(c => 
-                        c.name?.toLowerCase().includes(term) ||
-                        c.contact?.toLowerCase().includes(term) ||
-                        c.email?.toLowerCase().includes(term) ||
-                        c.primaryProducts?.some(p => p.toLowerCase().includes(term))
-                    ),
+                    customers: this.state.customers.filter(c => {
+                        const matchName = c.name?.toLowerCase().includes(term);
+                        const matchContacts = c.contacts?.some(contact => 
+                            contact.name?.toLowerCase().includes(term) ||
+                            contact.email?.toLowerCase().includes(term)
+                        );
+                        const matchLegacy = c.contact?.toLowerCase().includes(term) || 
+                                          c.email?.toLowerCase().includes(term);
+                        const matchProducts = c.primaryProducts?.some(p => p.toLowerCase().includes(term));
+                        return matchName || matchContacts || matchLegacy || matchProducts;
+                    }),
                     activities: this.state.activities.filter(a => 
                         a.subject?.toLowerCase().includes(term) ||
                         a.notes?.toLowerCase().includes(term)
@@ -1158,16 +1231,20 @@ addHour(time24h) {
             }
 
             convertToCSV(data) {
-                const headers = ['Name', 'Industry', 'Contact', 'Email', 'Phone', 'Status', 'Products'];
-                const rows = data.map(item => [
-                    item.name,
-                    item.industry || '',
-                    item.contact || '',
-                    item.email || '',
-                    item.phone || '',
-                    item.status || '',
-                    (item.primaryProducts || []).join('; ')
-                ]);
+                const headers = ['Name', 'Industry', 'Office Number', 'Primary Contact', 'Primary Email', 'Primary Cell', 'Status', 'Products'];
+                const rows = data.map(item => {
+                    const primaryContact = item.contacts?.[0] || {};
+                    return [
+                        item.name,
+                        item.industry || '',
+                        item.officeNumber || '',
+                        primaryContact.name || item.contact || '',
+                        primaryContact.email || item.email || '',
+                        primaryContact.cell || item.phone || '',
+                        item.status || '',
+                        (item.primaryProducts || []).join('; ')
+                    ];
+                });
 
                 return [headers, ...rows]
                     .map(row => row.map(cell => `"${cell}"`).join(','))
@@ -1435,6 +1512,41 @@ addHour(time24h) {
                 }
             }
 
+            // Contact management functions
+            addContact() {
+                if (!this.state.formData.contacts) {
+                    this.state.formData.contacts = [];
+                }
+                
+                this.state.formData.contacts.push({
+                    name: '',
+                    email: '',
+                    cell: '',
+                    title: ''
+                });
+                
+                this.render();
+            }
+
+            removeContact(index) {
+                if (this.state.formData.contacts && this.state.formData.contacts.length > 1) {
+                    this.state.formData.contacts.splice(index, 1);
+                    this.render();
+                }
+            }
+
+            updateContactField(index, field, value) {
+                if (!this.state.formData.contacts) {
+                    this.state.formData.contacts = [];
+                }
+                
+                if (!this.state.formData.contacts[index]) {
+                    this.state.formData.contacts[index] = {};
+                }
+                
+                this.state.formData.contacts[index][field] = value;
+            }
+
             // CRUD Operations
             handleAddCustomer() {
                 const newCustomer = {
@@ -1448,6 +1560,16 @@ addHour(time24h) {
                     primaryProducts: this.state.formData.primaryProducts || [],
                     preferredContact: this.state.formData.preferredContact || 'Any',
                     attachments: this.state.formData.attachments || [],
+                    contacts: this.state.formData.contacts || [{
+                        name: this.state.formData.contact || '',
+                        email: this.state.formData.email || '',
+                        cell: this.state.formData.phone || '',
+                        title: ''
+                    }],
+                    // Keep legacy fields for backward compatibility
+                    contact: this.state.formData.contacts?.[0]?.name || this.state.formData.contact || '',
+                    email: this.state.formData.contacts?.[0]?.email || this.state.formData.email || '',
+                    phone: this.state.formData.contacts?.[0]?.cell || this.state.formData.phone || '',
                     createdAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString()
                 };
@@ -1472,7 +1594,17 @@ addHour(time24h) {
                         : this.state.formData.industry,
                     primaryProducts: this.state.formData.primaryProducts || [],
                     preferredContact: this.state.formData.preferredContact || 'Any',
-                    attachments: this.state.formData.attachments || []
+                    attachments: this.state.formData.attachments || [],
+                    contacts: this.state.formData.contacts || [{
+                        name: this.state.formData.contact || '',
+                        email: this.state.formData.email || '',
+                        cell: this.state.formData.phone || '',
+                        title: ''
+                    }],
+                    // Keep legacy fields for backward compatibility
+                    contact: this.state.formData.contacts?.[0]?.name || this.state.formData.contact || '',
+                    email: this.state.formData.contacts?.[0]?.email || this.state.formData.email || '',
+                    phone: this.state.formData.contacts?.[0]?.cell || this.state.formData.phone || ''
                 };
                 
                 delete updatedData.customIndustry;
@@ -1797,7 +1929,13 @@ addHour(time24h) {
                     this.state.formData = {
                         ...customer,
                         industry: isCustomIndustry ? 'Other' : customer.industry,
-                        customIndustry: isCustomIndustry ? customer.industry : ''
+                        customIndustry: isCustomIndustry ? customer.industry : '',
+                        contacts: customer.contacts || [{
+                            name: customer.contact || '',
+                            email: customer.email || '',
+                            cell: customer.phone || '',
+                            title: ''
+                        }]
                     };
                     this.state.showModal = 'customer';
                     this.render();
@@ -2329,6 +2467,7 @@ addHour(time24h) {
                             <div class="divide-y">
                                 ${filteredCustomers.map(customer => {
                                     const stage = this.customerStages.find(s => s.id === customer.pipelineStage);
+                                    const primaryContact = customer.contacts?.[0] || {};
                                     return `
                                         <div class="p-4 hover:bg-gray-50">
                                             <div class="flex items-start justify-between">
@@ -2343,9 +2482,12 @@ addHour(time24h) {
                                                         <h3 class="font-semibold text-lg">${customer.name}</h3>
                                                         <p class="text-sm text-gray-600">${customer.industry || '-'}</p>
                                                         <div class="mt-2 space-y-1 text-sm">
-                                                            <p>${this.icon('Users', 16, 'inline text-gray-400')} ${customer.contact}</p>
-                                                            <p>${this.icon('Mail', 16, 'inline text-gray-400')} ${customer.email}</p>
-                                                            <p>${this.icon('Phone', 16, 'inline text-gray-400')} ${customer.phone}</p>
+                                                            <p>${this.icon('Users', 16, 'inline text-gray-400')} ${primaryContact.name || customer.contact || '-'}</p>
+                                                            <p>${this.icon('Mail', 16, 'inline text-gray-400')} ${primaryContact.email || customer.email || '-'}</p>
+                                                            <p>${this.icon('Phone', 16, 'inline text-gray-400')} ${primaryContact.cell || customer.phone || '-'}</p>
+                                                            ${customer.officeNumber ? `
+                                                                <p>${this.icon('Phone', 16, 'inline text-gray-400')} Office: ${customer.officeNumber}</p>
+                                                            ` : ''}
                                                         </div>
                                                         ${customer.primaryProducts && customer.primaryProducts.length > 0 ? `
                                                             <div class="mt-2">
