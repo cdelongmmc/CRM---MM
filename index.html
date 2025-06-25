@@ -2721,12 +2721,29 @@ addHour(time24h) {
                 `;
             }
             renderActivities() {
-                const today = new Date().toISOString().split('T')[0];
-                const thisWeekEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-                const nextWeekStart = new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-                const nextWeekEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                const today = new Date();
+                const todayStr = today.toISOString().split('T')[0];
 
-                // Apply filters
+                // Calculate this week (current week Sunday to Saturday)
+                const currentDay = today.getDay(); // 0 = Sunday, 6 = Saturday
+                const thisWeekStart = new Date(today);
+                thisWeekStart.setDate(today.getDate() - currentDay); // Go to Sunday
+                const thisWeekEnd = new Date(thisWeekStart);
+                thisWeekEnd.setDate(thisWeekStart.getDate() + 6); // Go to Saturday
+
+                // Calculate next week (following Sunday to Saturday)
+                const nextWeekStart = new Date(thisWeekEnd);
+                nextWeekStart.setDate(thisWeekEnd.getDate() + 1); // Next Sunday
+                const nextWeekEnd = new Date(nextWeekStart);
+                nextWeekEnd.setDate(nextWeekStart.getDate() + 6); // Next Saturday
+
+                // Convert to string format for comparison
+                const thisWeekStartStr = thisWeekStart.toISOString().split('T')[0];
+                const thisWeekEndStr = thisWeekEnd.toISOString().split('T')[0];
+                const nextWeekStartStr = nextWeekStart.toISOString().split('T')[0];
+                const nextWeekEndStr = nextWeekEnd.toISOString().split('T')[0];
+
+                // Apply filters (keep your existing filter logic)
                 const filteredActivities = this.state.activities.filter(activity => {
                 if (this.state.activityFilter === 'all') return true;
                 if (this.state.activityFilter === 'overdue') return !activity.completed && activity.date < today;
@@ -2746,10 +2763,19 @@ addHour(time24h) {
                 });
 
                 // Group activities by time period
-                const todayActivities = filteredActivities.filter(a => !a.completed && a.date === today);
-                const thisWeekActivities = filteredActivities.filter(a => !a.completed && a.date > today && a.date <= thisWeekEnd);
-                const nextWeekActivities = filteredActivities.filter(a => !a.completed && a.date >= nextWeekStart && a.date <= nextWeekEnd);
-                const overdueActivities = filteredActivities.filter(a => !a.completed && a.date < today);
+                const todayActivities = filteredActivities.filter(a => !a.completed && a.date === todayStr);
+                const thisWeekActivities = filteredActivities.filter(a => 
+                    !a.completed && 
+                    a.date > todayStr && 
+                    a.date >= thisWeekStartStr && 
+                    a.date <= thisWeekEndStr
+                );
+                const nextWeekActivities = filteredActivities.filter(a => 
+                    !a.completed && 
+                    a.date >= nextWeekStartStr && 
+                    a.date <= nextWeekEndStr
+                );
+                const overdueActivities = filteredActivities.filter(a => !a.completed && a.date < todayStr);
                 const completedActivities = filteredActivities.filter(a => a.completed);
 
                 return `
