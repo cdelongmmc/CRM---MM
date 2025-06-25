@@ -2297,7 +2297,46 @@ addHour(time24h) {
                                                 </option>
                                             `).join('')}
                                         </select>
-                                        ${this.state.bulkMode ? `
+                                        <div class="flex flex-col sm:flex-row sm:items-center space-y-4 sm:space-y-0 sm:space-x-4 flex-1">
+                                            <input type="text" placeholder="Search customers..."
+                                                   value="${this.state.searchTerm}"
+                                                   oninput="app.updateSearchTerm(this.value)"
+                                                   class="flex-1 outline-none px-4 py-2 border rounded-lg">
+                                            <select onchange="app.updateIndustryFilter(this.value)"
+                                                    class="px-4 py-2 border rounded-lg w-full sm:w-auto">
+                                                <option value="all">All Industries</option>
+                                                ${INDUSTRIES.map(industry => `
+                                                    <option value="${industry}" ${this.state.industryFilter === industry ? 'selected' : ''}>
+                                                        ${industry}
+                                                    </option>
+                                                `).join('')}
+                                            </select>
+                                            <select onchange="app.updatePipelineFilter(this.value)"
+                                                    class="px-4 py-2 border rounded-lg w-full sm:w-auto">
+                                                <option value="all">All Stages</option>
+                                                ${this.customerStages.map(stage => `
+                                                    <option value="${stage.id}" ${this.state.pipelineFilter === stage.id ? 'selected' : ''}>
+                                                        ${stage.name}
+                                                    </option>
+                                                `).join('')}
+                                            </select>
+                                            <select onchange="app.updateStatusFilter(this.value)"
+                                                    class="px-4 py-2 border rounded-lg w-full sm:w-auto">
+                                                <option value="all">All Status</option>
+                                                <option value="prospect" ${this.state.statusFilter === 'prospect' ? 'selected' : ''}>Prospect</option>
+                                                <option value="active" ${this.state.statusFilter === 'active' ? 'selected' : ''}>Active</option>
+                                                <option value="inactive" ${this.state.statusFilter === 'inactive' ? 'selected' : ''}>Inactive</option>
+                                            </select>
+                                            ${this.state.bulkMode ? `
+                                                <select id="bulk-action-select" class="px-4 py-2 border rounded-lg">
+                                                    <option value="">Select Action</option>
+                                                    <option value="update-stage">Update Stage</option>
+                                                    <option value="update-status">Update Status</option>
+                                                    <option value="delete">Delete</option>
+                                                    <option value="export">Export</option>
+                                                </select>
+                                            ` : ''}
+                                        </div>
                                             <select id="bulk-action-select" class="px-4 py-2 border rounded-lg">
                                                 <option value="">Select Action</option>
                                                 <option value="update-stage">Update Stage</option>
