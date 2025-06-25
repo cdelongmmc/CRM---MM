@@ -3211,7 +3211,7 @@ addHour(time24h) {
             renderCustomerModal() {
                 const isEditing = !!this.state.editingCustomer;
                 const title = isEditing ? 'Edit Customer' : 'Add New Customer';
-                
+
                 return `
                     <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
                          onclick="app.closeModal()">
@@ -3223,7 +3223,6 @@ addHour(time24h) {
                                     ${this.icon('X', 24)}
                                 </button>
                             </div>
-                            
                             <form onsubmit="event.preventDefault(); app.handleModalSubmit()">
                                 <div class="form-section">
                                     <h4 class="form-section-title">Basic Information</h4>
@@ -3238,9 +3237,9 @@ addHour(time24h) {
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700 mb-1">Industry</label>
                                             <select
-                                                    value="${this.state.formData.industry || ''}"
-                                                    onchange="app.updateFormField('industry', this.value)"
-                                                    class="w-full p-2 border rounded-lg">
+                                                value="${this.state.formData.industry || ''}"
+                                                onchange="app.updateFormField('industry', this.value)"
+                                                class="w-full p-2 border rounded-lg">
                                                 <option value="">Select Industry</option>
                                                 ${INDUSTRIES.map(industry => `
                                                     <option value="${industry}" ${this.state.formData.industry === industry ? 'selected' : ''}>
@@ -3260,46 +3259,82 @@ addHour(time24h) {
                                         ` : ''}
                                     </div>
                                 </div>
-
                                 <div class="form-section">
                                     <h4 class="form-section-title">Contact Information</h4>
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Primary Contact</label>
-                                            <input type="text"
-                                                   value="${this.state.formData.contact || ''}"
-                                                   oninput="app.updateFormField('contact', this.value)"
-                                                   class="w-full p-2 border rounded-lg">
-                                        </div>
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                                            <input type="email"
-                                                   value="${this.state.formData.email || ''}"
-                                                   oninput="app.updateFormField('email', this.value)"
-                                                   class="w-full p-2 border rounded-lg">
-                                        </div>
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                        <div class="md:col-span-2">
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Office Number</label>
                                             <input type="tel"
-                                                   value="${this.state.formData.phone || ''}"
-                                                   oninput="app.updateFormField('phone', this.value)"
+                                                   value="${this.state.formData.officeNumber || ''}"
+                                                   oninput="app.updateFormField('officeNumber', this.value)"
                                                    class="w-full p-2 border rounded-lg">
-                                        </div>
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Preferred Contact Method</label>
-                                            <select value="${this.state.formData.preferredContact || 'Any'}"
-                                                    onchange="app.updateFormField('preferredContact', this.value)"
-                                                    class="w-full p-2 border rounded-lg">
-                                                ${CONTACT_METHODS.map(method => `
-                                                    <option value="${method}" ${this.state.formData.preferredContact === method ? 'selected' : ''}>
-                                                        ${method}
-                                                    </option>
-                                                `).join('')}
-                                            </select>
                                         </div>
                                     </div>
+                                    ${(this.state.formData.contacts || []).map((contact, index) => `
+                                        <div class="contact-section">
+                                            <div class="flex justify-between items-center mb-2">
+                                                <h5 class="font-medium text-gray-700">
+                                                    ${index === 0 ? 'Primary' : `Contact ${index + 1}`}
+                                                </h5>
+                                                ${index > 0 ? `
+                                                    <button type="button"
+                                                            onclick="app.removeContact(${index})"
+                                                            class="remove-contact-btn">
+                                                        ${this.icon('X', 16)} Remove
+                                                    </button>
+                                                ` : ''}
+                                            </div>
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                                                    <input type="text"
+                                                           value="${contact.name || ''}"
+                                                           oninput="app.updateContactField(${index}, 'name', this.value)"
+                                                           class="w-full p-2 border rounded-lg">
+                                                </div>
+                                                <div>
+                                                    <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                                    <input type="email"
+                                                           value="${contact.email || ''}"
+                                                           oninput="app.updateContactField(${index}, 'email', this.value)"
+                                                           class="w-full p-2 border rounded-lg">
+                                                </div>
+                                                <div>
+                                                    <label class="block text-sm font-medium text-gray-700 mb-1">Cell</label>
+                                                    <input type="tel"
+                                                           value="${contact.cell || ''}"
+                                                           oninput="app.updateContactField(${index}, 'cell', this.value)"
+                                                           class="w-full p-2 border rounded-lg">
+                                                </div>
+                                                <div>
+                                                    <label class="block text-sm font-medium text-gray-700 mb-1">Job Title</label>
+                                                    <input type="text"
+                                                           value="${contact.title || ''}"
+                                                           oninput="app.updateContactField(${index}, 'title', this.value)"
+                                                           class="w-full p-2 border rounded-lg">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                    <button type="button"
+                                            onclick="app.addContact()"
+                                            class="mt-4 flex items-center space-x-2 text-blue-600 hover:text-blue-800">
+                                        ${this.icon('Plus', 16)}
+                                        <span>Add Another Contact</span>
+                                    </button>
+                                    <div class="mt-4">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Preferred Contact Method</label>
+                                        <select value="${this.state.formData.preferredContact || 'Any'}"
+                                                onchange="app.updateFormField('preferredContact', this.value)"
+                                                class="w-full p-2 border rounded-lg">
+                                            ${CONTACT_METHODS.map(method => `
+                                                <option value="${method}" ${this.state.formData.preferredContact === method ? 'selected' : ''}>
+                                                    ${method}
+                                                </option>
+                                            `).join('')}
+                                        </select>
+                                    </div>
                                 </div>
-
                                 <div class="form-section">
                                     <h4 class="form-section-title">Products of Interest</h4>
                                     <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
@@ -3314,18 +3349,16 @@ addHour(time24h) {
                                         `).join('')}
                                     </div>
                                 </div>
-
                                 <div class="form-section">
                                     <h4 class="form-section-title">Business Details</h4>
                                     <div class="space-y-4">
                                         <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-1">Company Background</label>
+                                            <label class="block text-sm font-medium text-gray-700 mb-1">Account Notes</label>
                                             <textarea rows="3"
-                                                      value="${this.state.formData.companyBackground || ''}"
-                                                      oninput="app.updateFormField('companyBackground', this.value); app.updateCharCount('companyBackground', this.value, 500)"
+                                                      oninput="app.updateFormField('accountNotes', this.value); app.updateCharCount('accountNotes', this.value, 500)"
                                                       maxlength="500"
-                                                      class="w-full p-2 border rounded-lg"></textarea>
-                                            <div id="companyBackground-counter" class="char-counter">0/500</div>
+                                                      class="w-full p-2 border rounded-lg">${this.state.formData.accountNotes || ''}</textarea>
+                                            <div id="accountNotes-counter" class="char-counter">${(this.state.formData.accountNotes || '').length}/500</div>
                                         </div>
                                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div>
@@ -3353,7 +3386,6 @@ addHour(time24h) {
                                         </div>
                                     </div>
                                 </div>
-
                                 <div class="form-section">
                                     <h4 class="form-section-title">Online Presence</h4>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3375,7 +3407,6 @@ addHour(time24h) {
                                         </div>
                                     </div>
                                 </div>
-
                                 <div class="form-section">
                                     <h4 class="form-section-title">Attachments</h4>
                                     <div>
@@ -3389,7 +3420,6 @@ addHour(time24h) {
                                             ${this.icon('Upload', 20)}
                                             <span>${this.state.uploadingFile ? 'Uploading...' : 'Upload PDF'}</span>
                                         </button>
-                                        
                                         ${(this.state.formData.attachments || []).length > 0 ? `
                                             <div class="mt-3 space-y-2">
                                                 ${this.state.formData.attachments.map(attachment => `
@@ -3412,7 +3442,6 @@ addHour(time24h) {
                                         ` : ''}
                                     </div>
                                 </div>
-                                
                                 <div class="flex justify-end space-x-3 mt-6">
                                     <button type="button" onclick="app.closeModal()"
                                             class="px-4 py-2 text-gray-600 hover:text-gray-800">
@@ -3428,288 +3457,295 @@ addHour(time24h) {
                     </div>
                 `;
             }
+        renderCustomerDetailsModal() {
+            const customer = this.state.customers.find(c => c.id === this.state.viewingCustomerId);
+            if (!customer) return '';
 
-            renderCustomerDetailsModal() {
-                const customer = this.state.customers.find(c => c.id === this.state.viewingCustomerId);
-                if (!customer) return '';
+            const opportunities = this.state.opportunities.filter(o => o.customerId === customer.id);
+            const activities = this.state.activities.filter(a => a.customerId === customer.id);
+            const quotes = this.state.quotes.filter(q => q.customerId === customer.id);
 
-                const opportunities = this.state.opportunities.filter(o => o.customerId === customer.id);
-                const activities = this.state.activities.filter(a => a.customerId === customer.id);
-                const quotes = this.state.quotes.filter(q => q.customerId === customer.id);
-
-                return `
-                    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-                         onclick="app.closeModal()">
-                        <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"
-                             onclick="event.stopPropagation()">
-                            <div class="sticky top-0 bg-white border-b p-4">
-                                <div class="flex justify-between items-center">
-                                    <div>
-                                        <h3 class="text-xl font-semibold">${customer.name}</h3>
-                                        <p class="text-sm text-gray-600">${customer.industry}</p>
-                                    </div>
-                                    <button onclick="app.closeModal()" class="text-gray-500 hover:text-gray-700">
-                                        ${this.icon('X', 24)}
-                                    </button>
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+                     onclick="app.closeModal()">
+                    <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"
+                         onclick="event.stopPropagation()">
+                        <div class="sticky top-0 bg-white border-b p-4">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <h3 class="text-xl font-semibold">${customer.name}</h3>
+                                    <p class="text-sm text-gray-600">${customer.industry}</p>
                                 </div>
-                            </div>
-                            
-                            <div class="p-6">
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                                    <div>
-                                        <p class="text-sm text-gray-500">Contact</p>
-                                        <p class="font-medium">${customer.contact}</p>
-                                        <p class="text-sm text-gray-600">${customer.email}</p>
-                                        <p class="text-sm text-gray-600">${customer.phone}</p>
-                                    </div>
-                                    <div>
-                                        <p class="text-sm text-gray-500">Status</p>
-                                        <div class="mt-1 space-y-1">
-                                            <span class="inline-block px-2 py-1 text-xs rounded-full ${
-                                                customer.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                                            }">
-                                                ${customer.status}
-                                            </span>
-                                            ${this.customerStages.find(s => s.id === customer.pipelineStage) ? `
-                                                <span class="inline-block px-2 py-1 text-xs rounded-full text-white ${
-                                                    this.customerStages.find(s => s.id === customer.pipelineStage).color
-                                                }">
-                                                    ${this.customerStages.find(s => s.id === customer.pipelineStage).name}
-                                                </span>
-                                            ` : ''}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <p class="text-sm text-gray-500">Preferred Contact</p>
-                                        <span class="inline-block px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
-                                            ${customer.preferredContact || 'Any'}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                ${customer.primaryProducts && customer.primaryProducts.length > 0 ? `
-                                    <div class="mb-6">
-                                        <p class="text-sm text-gray-500 mb-2">Products of Interest</p>
-                                        <div>
-                                            ${customer.primaryProducts.map(product => `
-                                                <span class="product-tag">${product}</span>
-                                            `).join('')}
-                                        </div>
-                                    </div>
-                                ` : ''}
-
-                                <div class="border-b mb-4">
-                                    <nav class="flex space-x-8">
-                                        ${[
-                                            { id: 'opportunities', label: 'Opportunities', count: opportunities.length },
-                                            { id: 'activities', label: 'Activities', count: activities.length },
-                                            { id: 'quotes', label: 'Quotes', count: quotes.length },
-                                            { id: 'details', label: 'Details', count: null }
-                                        ].map(tab => `
-                                            <button onclick="app.state.customerDetailTab = '${tab.id}'; app.render()"
-                                                    class="pb-2 border-b-2 ${
-                                                        this.state.customerDetailTab === tab.id 
-                                                            ? 'border-blue-600 text-blue-600' 
-                                                            : 'border-transparent text-gray-500 hover:text-gray-700'
-                                                    }">
-                                                ${tab.label}
-                                                ${tab.count !== null ? `<span class="ml-2 text-sm">(${tab.count})</span>` : ''}
-                                            </button>
-                                        `).join('')}
-                                    </nav>
-                                </div>
-
-                                ${this.renderCustomerDetailTab(customer, opportunities, activities, quotes)}
+                                <button onclick="app.closeModal()" class="text-gray-500 hover:text-gray-700">
+                                    ${this.icon('X', 24)}
+                                </button>
                             </div>
                         </div>
+                        <div class="p-6">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                                <div>
+                                    <p class="text-sm text-gray-500">Contact</p>
+                                    ${customer.officeNumber ? `<p class="text-sm text-gray-600">Office: ${customer.officeNumber}</p>` : ''}
+                                    ${customer.contacts && customer.contacts.length > 0
+                                        ? customer.contacts.map((contact, index) => `
+                                            <div class="${index > 0 ? 'mt-2 pt-2 border-t' : ''}">
+                                                <p class="font-medium">${contact.name}${contact.title ? ` - ${contact.title}` : ''}</p>
+                                                <p class="text-sm text-gray-600">${contact.email}</p>
+                                                <p class="text-sm text-gray-600">${contact.cell}</p>
+                                            </div>
+                                        `).join('')
+                                        : `
+                                            <p class="font-medium">${customer.contact}</p>
+                                            <p class="text-sm text-gray-600">${customer.email}</p>
+                                            <p class="text-sm text-gray-600">${customer.phone}</p>
+                                        `
+                                    }
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-500">Status</p>
+                                    <div class="mt-1 space-y-1">
+                                        <span class="inline-block px-2 py-1 text-xs rounded-full ${
+                                            customer.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                        }">
+                                            ${customer.status}
+                                        </span>
+                                        ${this.customerStages.find(s => s.id === customer.pipelineStage) ? `
+                                            <span class="inline-block px-2 py-1 text-xs rounded-full text-white ${
+                                                this.customerStages.find(s => s.id === customer.pipelineStage).color
+                                            }">
+                                                ${this.customerStages.find(s => s.id === customer.pipelineStage).name}
+                                            </span>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-500">Preferred Contact</p>
+                                    <span class="inline-block px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
+                                        ${customer.preferredContact || 'Any'}
+                                    </span>
+                                </div>
+                            </div>
+                            ${customer.primaryProducts && customer.primaryProducts.length > 0 ? `
+                                <div class="mb-6">
+                                    <p class="text-sm text-gray-500 mb-2">Products of Interest</p>
+                                    <div>
+                                        ${customer.primaryProducts.map(product => `
+                                            <span class="product-tag">${product}</span>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                            <div class="border-b mb-4">
+                                <nav class="flex space-x-8">
+                                    ${[
+                                        { id: 'opportunities', label: 'Opportunities', count: opportunities.length },
+                                        { id: 'activities', label: 'Activities', count: activities.length },
+                                        { id: 'quotes', label: 'Quotes', count: quotes.length },
+                                        { id: 'details', label: 'Details', count: null }
+                                    ].map(tab => `
+                                        <button onclick="app.state.customerDetailTab = '${tab.id}'; app.render()"
+                                                class="pb-2 border-b-2 ${
+                                                    this.state.customerDetailTab === tab.id 
+                                                        ? 'border-blue-600 text-blue-600' 
+                                                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                                                }">
+                                            ${tab.label}
+                                            ${tab.count !== null ? `<span class="ml-2 text-sm">(${tab.count})</span>` : ''}
+                                        </button>
+                                    `).join('')}
+                                </nav>
+                            </div>
+                            ${this.renderCustomerDetailTab(customer, opportunities, activities, quotes)}
+                        </div>
                     </div>
+                </div>
+            `;
+        }
+
+        renderCustomerDetailTab(customer, opportunities, activities, quotes) {
+            switch(this.state.customerDetailTab) {
+            case 'opportunities':
+                return `
+                <div class="space-y-3">
+                    ${opportunities.length === 0 ? `
+                    <p class="text-gray-400">No opportunities yet</p>
+                    ` : opportunities.map(opp => {
+                    const stage = this.pipelineStages.find(s => s.id === opp.stage);
+                    return `
+                        <div class="border rounded-lg p-4">
+                        <div class="flex justify-between items-start">
+                            <div>
+                            <h4 class="font-medium">${opp.title}</h4>
+                            <p class="text-sm text-gray-600">Rep: ${opp.salesRep}</p>
+                            <p class="text-sm text-gray-500">Close: ${opp.expectedClose || 'Not set'}</p>
+                            </div>
+                            <div class="text-right">
+                            <p class="font-semibold">$${(opp.value || 0).toLocaleString()}</p>
+                            ${stage ? `
+                                <span class="inline-block mt-1 px-2 py-1 text-xs rounded-full text-white ${stage.color}">
+                                ${stage.name}
+                                </span>
+                            ` : ''}
+                            </div>
+                        </div>
+                        </div>
+                    `;
+                    }).join('')}
+                </div>
+                `;
+
+            case 'activities':
+                return `
+                <div>
+                    <div class="flex justify-between items-center mb-3">
+                    <button onclick="app.toggleShowCompletedModal()"
+                        class="text-sm text-blue-600 hover:text-blue-800">
+                        ${this.state.showCompletedActivities ? 'Hide' : 'Show'} Completed
+                    </button>
+                    <button onclick="app.scheduleActivityForCustomer('${customer.id}'); app.closeModal();"
+                        class="text-blue-600 hover:text-blue-800 text-sm">
+                        ${this.icon('Plus', 16, 'inline')} Add Activity
+                    </button>
+                    </div>
+                    <div class="space-y-2">
+                    ${activities
+                        .filter(a => this.state.showCompletedActivities || !a.completed)
+                        .sort((a, b) => new Date(b.date) - new Date(a.date))
+                        .map(activity => `
+                        <div class="border rounded-lg p-3 ${activity.completed ? 'bg-gray-50 cursor-pointer hover:bg-gray-100' : ''}"
+                             ${activity.completed ? `onclick="app.viewActivity('${activity.id}')"` : ''}>
+                            <div class="flex justify-between items-start">
+                            <div class="flex-1">
+                                <p class="font-medium text-sm">${activity.subject}</p>
+                                <p class="text-xs text-gray-600">${activity.date} at ${activity.time}</p>
+                                ${activity.notes ? `
+                                <p class="text-xs text-gray-500 mt-1">${activity.notes}</p>
+                                ` : ''}
+                                ${activity.audioRecording ? `
+                                <div class="mt-2">
+                                    <audio controls class="w-full max-w-xs h-8" onclick="event.stopPropagation()">
+                                    <source src="${activity.audioRecording.url || activity.audioRecording.localData}" 
+                                        type="${activity.audioRecording.mimeType || 'audio/webm'}">
+                                    </audio>
+                                    <p class="text-xs text-gray-400">
+                                    Audio (${Math.floor(activity.audioRecording.duration / 60)}:${(activity.audioRecording.duration % 60).toString().padStart(2, '0')})
+                                    </p>
+                                </div>
+                                ` : ''}
+                            </div>
+                            <span class="text-xs px-2 py-1 rounded-full ${
+                                activity.completed 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-yellow-100 text-yellow-800'
+                            }">
+                                ${activity.completed ? 'Completed' : 'Pending'}
+                            </span>
+                            </div>
+                        </div>
+                        `).join('')}
+                    </div>
+                </div>
+                `;
+
+            case 'quotes':
+                return `
+                <div class="space-y-3">
+                    ${quotes.length === 0 ? `
+                    <p class="text-gray-400">No quotes yet</p>
+                    ` : quotes.map(quote => `
+                    <div class="border rounded-lg p-4">
+                        <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-medium">${quote.quoteName}</h4>
+                            <p class="text-sm text-gray-500">${quote.quoteNumber}</p>
+                            <p class="text-xs text-gray-500 mt-1">
+                            Created: ${new Date(quote.createdAt).toLocaleDateString()}
+                            </p>
+                        </div>
+                        <span class="px-2 py-1 text-xs rounded-full ${
+                            quote.status === 'sent' ? 'bg-blue-100 text-blue-800' :
+                            quote.status === 'accepted' ? 'bg-green-100 text-green-800' :
+                            'bg-gray-100 text-gray-800'
+                        }">
+                            ${quote.status}
+                        </span>
+                        </div>
+                    </div>
+                    `).join('')}
+                </div>
+                `;
+
+            case 'details':
+                return `
+                <div class="space-y-6">
+                    ${customer.accountNotes ? `
+                    <div>
+                        <h4 class="font-medium mb-2">Account Notes</h4>
+                        <p class="text-sm text-gray-600">${customer.accountNotes}</p>
+                    </div>
+                    ` : ''}
+                    
+                    ${customer.deliveryPreferences ? `
+                    <div>
+                        <h4 class="font-medium mb-2">Delivery Preferences</h4>
+                        <p class="text-sm text-gray-600">${customer.deliveryPreferences}</p>
+                    </div>
+                    ` : ''}
+                    
+                    ${customer.paymentTerms ? `
+                    <div>
+                        <h4 class="font-medium mb-2">Payment Terms</h4>
+                        <p class="text-sm text-gray-600">${customer.paymentTerms}</p>
+                    </div>
+                    ` : ''}
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    ${customer.website ? `
+                        <div>
+                        <h4 class="font-medium mb-2">Website</h4>
+                        <a href="${customer.website}" target="_blank" 
+                           class="text-sm text-blue-600 hover:underline flex items-center space-x-1">
+                            ${this.icon('Globe', 16)}
+                            <span>Visit Website</span>
+                        </a>
+                        </div>
+                    ` : ''}
+                    
+                    ${customer.linkedIn ? `
+                        <div>
+                        <h4 class="font-medium mb-2">LinkedIn</h4>
+                        <a href="${customer.linkedIn}" target="_blank" 
+                           class="text-sm text-blue-600 hover:underline flex items-center space-x-1">
+                            ${this.icon('LinkedIn', 16)}
+                            <span>View LinkedIn</span>
+                        </a>
+                        </div>
+                    ` : ''}
+                    </div>
+
+                    ${customer.attachments && customer.attachments.length > 0 ? `
+                    <div>
+                        <h4 class="font-medium mb-2">Attachments</h4>
+                        <div class="space-y-2">
+                        ${customer.attachments.map(attachment => `
+                            <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                            <a href="${attachment.url}" target="_blank" 
+                               class="text-sm text-blue-600 hover:underline flex items-center space-x-2">
+                                ${this.icon('Paperclip', 16)}
+                                <span>${attachment.name}</span>
+                            </a>
+                            <span class="text-xs text-gray-500">
+                                ${new Date(attachment.uploadedAt).toLocaleDateString()}
+                            </span>
+                            </div>
+                        `).join('')}
+                        </div>
+                    </div>
+                    ` : ''}
+                </div>
                 `;
             }
-
-            renderCustomerDetailTab(customer, opportunities, activities, quotes) {
-                switch(this.state.customerDetailTab) {
-                    case 'opportunities':
-                        return `
-                            <div class="space-y-3">
-                                ${opportunities.length === 0 ? `
-                                    <p class="text-gray-400">No opportunities yet</p>
-                                ` : opportunities.map(opp => {
-                                    const stage = this.pipelineStages.find(s => s.id === opp.stage);
-                                    return `
-                                        <div class="border rounded-lg p-4">
-                                            <div class="flex justify-between items-start">
-                                                <div>
-                                                    <h4 class="font-medium">${opp.title}</h4>
-                                                    <p class="text-sm text-gray-600">Rep: ${opp.salesRep}</p>
-                                                    <p class="text-sm text-gray-500">Close: ${opp.expectedClose || 'Not set'}</p>
-                                                </div>
-                                                <div class="text-right">
-                                                    <p class="font-semibold">$${(opp.value || 0).toLocaleString()}</p>
-                                                    ${stage ? `
-                                                        <span class="inline-block mt-1 px-2 py-1 text-xs rounded-full text-white ${stage.color}">
-                                                            ${stage.name}
-                                                        </span>
-                                                    ` : ''}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    `;
-                                }).join('')}
-                            </div>
-                        `;
-
-                    case 'activities':
-                        return `
-                            <div>
-                                <div class="flex justify-between items-center mb-3">
-                                    <button onclick="app.toggleShowCompletedModal()"
-                                            class="text-sm text-blue-600 hover:text-blue-800">
-                                        ${this.state.showCompletedActivities ? 'Hide' : 'Show'} Completed
-                                    </button>
-                                    <button onclick="app.scheduleActivityForCustomer('${customer.id}'); app.closeModal();"
-                                            class="text-blue-600 hover:text-blue-800 text-sm">
-                                        ${this.icon('Plus', 16, 'inline')} Add Activity
-                                    </button>
-                                </div>
-                                <div class="space-y-2">
-                                    ${activities
-                                        .filter(a => this.state.showCompletedActivities || !a.completed)
-                                        .sort((a, b) => new Date(b.date) - new Date(a.date))
-                                        .map(activity => `
-                                            <div class="border rounded-lg p-3 ${activity.completed ? 'bg-gray-50 cursor-pointer hover:bg-gray-100' : ''}"
-                                                 ${activity.completed ? `onclick="app.viewActivity('${activity.id}')"` : ''}>
-                                                <div class="flex justify-between items-start">
-                                                    <div class="flex-1">
-                                                        <p class="font-medium text-sm">${activity.subject}</p>
-                                                        <p class="text-xs text-gray-600">${activity.date} at ${activity.time}</p>
-                                                        ${activity.notes ? `
-                                                            <p class="text-xs text-gray-500 mt-1">${activity.notes}</p>
-                                                        ` : ''}
-                                                        ${activity.audioRecording ? `
-                                                            <div class="mt-2">
-                                                                <audio controls class="w-full max-w-xs h-8" onclick="event.stopPropagation()">
-                                                                    <source src="${activity.audioRecording.url || activity.audioRecording.localData}" 
-                                                                            type="${activity.audioRecording.mimeType || 'audio/webm'}">
-                                                                </audio>
-                                                                <p class="text-xs text-gray-400">
-                                                                    Audio (${Math.floor(activity.audioRecording.duration / 60)}:${(activity.audioRecording.duration % 60).toString().padStart(2, '0')})
-                                                                </p>
-                                                            </div>
-                                                        ` : ''}
-                                                    </div>
-                                                    <span class="text-xs px-2 py-1 rounded-full ${
-                                                        activity.completed 
-                                                            ? 'bg-green-100 text-green-800' 
-                                                            : 'bg-yellow-100 text-yellow-800'
-                                                    }">
-                                                        ${activity.completed ? 'Completed' : 'Pending'}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        `).join('')}
-                                </div>
-                            </div>
-                        `;
-
-                    case 'quotes':
-                        return `
-                            <div class="space-y-3">
-                                ${quotes.length === 0 ? `
-                                    <p class="text-gray-400">No quotes yet</p>
-                                ` : quotes.map(quote => `
-                                    <div class="border rounded-lg p-4">
-                                        <div class="flex justify-between items-start">
-                                            <div>
-                                                <h4 class="font-medium">${quote.quoteName}</h4>
-                                                <p class="text-sm text-gray-500">${quote.quoteNumber}</p>
-                                                <p class="text-xs text-gray-500 mt-1">
-                                                    Created: ${new Date(quote.createdAt).toLocaleDateString()}
-                                                </p>
-                                            </div>
-                                            <span class="px-2 py-1 text-xs rounded-full ${
-                                                quote.status === 'sent' ? 'bg-blue-100 text-blue-800' :
-                                                quote.status === 'accepted' ? 'bg-green-100 text-green-800' :
-                                                'bg-gray-100 text-gray-800'
-                                            }">
-                                                ${quote.status}
-                                            </span>
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        `;
-
-                    case 'details':
-                        return `
-                            <div class="space-y-6">
-                                ${customer.companyBackground ? `
-                                    <div>
-                                        <h4 class="font-medium mb-2">Company Background</h4>
-                                        <p class="text-sm text-gray-600">${customer.companyBackground}</p>
-                                    </div>
-                                ` : ''}
-                                
-                                ${customer.deliveryPreferences ? `
-                                    <div>
-                                        <h4 class="font-medium mb-2">Delivery Preferences</h4>
-                                        <p class="text-sm text-gray-600">${customer.deliveryPreferences}</p>
-                                    </div>
-                                ` : ''}
-                                
-                                ${customer.paymentTerms ? `
-                                    <div>
-                                        <h4 class="font-medium mb-2">Payment Terms</h4>
-                                        <p class="text-sm text-gray-600">${customer.paymentTerms}</p>
-                                    </div>
-                                ` : ''}
-                                
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    ${customer.website ? `
-                                        <div>
-                                            <h4 class="font-medium mb-2">Website</h4>
-                                            <a href="${customer.website}" target="_blank" 
-                                               class="text-sm text-blue-600 hover:underline flex items-center space-x-1">
-                                                ${this.icon('Globe', 16)}
-                                                <span>Visit Website</span>
-                                            </a>
-                                        </div>
-                                    ` : ''}
-                                    
-                                    ${customer.linkedIn ? `
-                                        <div>
-                                            <h4 class="font-medium mb-2">LinkedIn</h4>
-                                            <a href="${customer.linkedIn}" target="_blank" 
-                                               class="text-sm text-blue-600 hover:underline flex items-center space-x-1">
-                                                ${this.icon('LinkedIn', 16)}
-                                                <span>View LinkedIn</span>
-                                            </a>
-                                        </div>
-                                    ` : ''}
-                                </div>
-
-                                ${customer.attachments && customer.attachments.length > 0 ? `
-                                    <div>
-                                        <h4 class="font-medium mb-2">Attachments</h4>
-                                        <div class="space-y-2">
-                                            ${customer.attachments.map(attachment => `
-                                                <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
-                                                    <a href="${attachment.url}" target="_blank" 
-                                                       class="text-sm text-blue-600 hover:underline flex items-center space-x-2">
-                                                        ${this.icon('Paperclip', 16)}
-                                                        <span>${attachment.name}</span>
-                                                    </a>
-                                                    <span class="text-xs text-gray-500">
-                                                        ${new Date(attachment.uploadedAt).toLocaleDateString()}
-                                                    </span>
-                                                </div>
-                                            `).join('')}
-                                        </div>
-                                    </div>
-                                ` : ''}
-                            </div>
-                        `;
-                }
-            }
+        }
 
             renderOpportunityModal() {
                 return `
