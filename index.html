@@ -85,6 +85,45 @@
             }
         }
 
+        /* Fix for navigation scroll and Market Intel button visibility */
+        nav.space-y-2 {
+            max-height: calc(100vh - 300px);
+            overflow-y: auto;
+            padding-bottom: 20px;
+        }
+        
+        nav button {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            cursor: pointer;
+        }
+        
+        nav.space-y-2::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        nav.space-y-2::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+        
+        nav.space-y-2::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+        }
+        
+        nav.space-y-2::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+        
+        /* Ensure mobile menu shows all items */
+        @media (max-width: 1024px) {
+            nav.space-y-2 {
+                max-height: calc(100vh - 200px);
+            }
+        }
+
         /* Form sections styling */
         .form-section {
             border: 1px solid #e5e7eb;
