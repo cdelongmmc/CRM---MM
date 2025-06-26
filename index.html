@@ -889,6 +889,280 @@
                 
                 this.state.marketIntelligence.recommendations = recommendations;
             }
+            // Market Intelligence Dashboard UI
+            renderMarketIntelligenceDashboard() {
+                const mi = this.state.marketIntelligence;
+                const steelPrice = mi.steelPrices.current?.steel;
+                const trends = mi.marketTrends;
+
+                return `
+                    <div class="p-4 lg:p-8">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-2xl lg:text-3xl font-bold">Steel Market Intelligence</h2>
+                            <div class="flex space-x-3">
+                                <button onclick="app.fetchSteelPrices()"
+                                    class="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 ${mi.isLoading ? 'opacity-50 cursor-not-allowed' : ''}">
+                                    ${this.icon('RefreshCw', 20, mi.isLoading ? 'animate-spin' : '')}
+                                    <span>${mi.isLoading ? 'Updating...' : 'Refresh Data'}</span>
+                                </button>
+                                <button onclick="app.setView('dashboard')"
+                                    class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                                    Back to Dashboard
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Current Pricing Summary -->
+                        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="text-lg font-semibold">Steel Price</h3>
+                                    ${trends?.priceDirection === 'rising' ? this.icon('TrendingUp', 24, 'text-green-500') :
+                                      trends?.priceDirection === 'falling' ? this.icon('TrendingDown', 24, 'text-red-500') :
+                                      this.icon('Minus', 24, 'text-gray-500')}
+                                </div>
+                                <p class="text-3xl font-bold">${steelPrice ? '$' + steelPrice.toFixed(2) : 'Loading...'}</p>
+                                <p class="text-sm text-gray-600">per ton (CNY/USD)</p>
+                                ${trends?.priceChangePercent ? `
+                                    <p class="text-sm mt-2 ${parseFloat(trends.priceChangePercent) > 0 ? 'text-green-600' : 'text-red-600'}">
+                                        ${parseFloat(trends.priceChangePercent) > 0 ? '+' : ''}${trends.priceChangePercent}% this week
+                                    </p>
+                                ` : ''}
+                            </div>
+
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <h3 class="text-lg font-semibold mb-4">Market Volatility</h3>
+                                <p class="text-3xl font-bold">${trends?.volatility || 'N/A'}</p>
+                                <p class="text-sm text-gray-600">Price standard deviation</p>
+                                <div class="mt-4">
+                                    <div class="w-full bg-gray-200 rounded-full h-2">
+                                        <div class="bg-${parseFloat(trends?.volatility || 0) > 50 ? 'red' : parseFloat(trends?.volatility || 0) > 25 ? 'yellow' : 'green'}-500 h-2 rounded-full" 
+                                            style="width: ${Math.min(parseFloat(trends?.volatility || 0), 100)}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <h3 class="text-lg font-semibold mb-4">Demand Forecast</h3>
+                                <p class="text-3xl font-bold capitalize">${trends?.demandForecast || 'Calculating...'}</p>
+                                <p class="text-sm text-gray-600">Next quarter outlook</p>
+                                <div class="mt-4">
+                                    <span class="inline-block px-3 py-1 text-sm rounded-full ${
+                                        trends?.demandForecast === 'high' ? 'bg-red-100 text-red-800' :
+                                        trends?.demandForecast === 'moderate' ? 'bg-yellow-100 text-yellow-800' :
+                                        'bg-green-100 text-green-800'
+                                    }">
+                                        ${trends?.demandForecast === 'high' ? 'High Demand Period' :
+                                          trends?.demandForecast === 'moderate' ? 'Moderate Demand' :
+                                          'Lower Demand Period'}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <h3 class="text-lg font-semibold mb-4">Competitor Analysis</h3>
+                                <p class="text-3xl font-bold">
+                                    ${mi.competitorData.averageMarketPrice ? '$' + mi.competitorData.averageMarketPrice.toFixed(2) : 'Loading...'}
+                                </p>
+                                <p class="text-sm text-gray-600">Average market price</p>
+                                ${mi.competitorData.averageMarketPrice && steelPrice ? `
+                                    <p class="text-sm mt-2 ${steelPrice < mi.competitorData.averageMarketPrice ? 'text-green-600' : 'text-red-600'}">
+                                        ${steelPrice < mi.competitorData.averageMarketPrice ? 'Below' : 'Above'} market average
+                                    </p>
+                                ` : ''}
+                            </div>
+                        </div>
+
+                        <!-- Charts and Analysis -->
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                            <!-- Price Trend Chart -->
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <h3 class="text-lg font-semibold mb-4">30-Day Price Trend</h3>
+                                <div class="h-64">
+                                    ${this.renderPriceChart()}
+                                </div>
+                            </div>
+
+                            <!-- Market Share Chart -->
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <h3 class="text-lg font-semibold mb-4">Market Share Analysis</h3>
+                                <div class="space-y-3">
+                                    ${Object.entries(mi.competitorData.marketShare || {}).map(([company, share]) => `
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-sm font-medium">${company}</span>
+                                            <div class="flex items-center space-x-2">
+                                                <div class="w-24 bg-gray-200 rounded-full h-2">
+                                                    <div class="h-2 rounded-full ${company === 'Your Company' ? 'bg-blue-500' : 'bg-gray-400'}" 
+                                                        style="width: ${share * 2}%"></div>
+                                                </div>
+                                                <span class="text-sm text-gray-600 w-12">${share}%</span>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Market News and Sentiment -->
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                            <!-- Market Sentiment Analysis -->
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <h3 class="text-lg font-semibold mb-4">Market Sentiment</h3>
+                                ${mi.marketSentiment ? `
+                                    <div class="text-center">
+                                        <div class="text-3xl font-bold mb-2 ${
+                                            mi.marketSentiment.overall === 'bullish' ? 'text-green-600' :
+                                            mi.marketSentiment.overall === 'bearish' ? 'text-red-600' :
+                                            'text-gray-600'
+                                        }">
+                                            ${mi.marketSentiment.overall === 'bullish' ? '📈 Bullish' :
+                                              mi.marketSentiment.overall === 'bearish' ? '📉 Bearish' :
+                                              '➡️ Neutral'}
+                                        </div>
+                                        <div class="text-sm text-gray-600 space-y-1">
+                                            <p>Positive: ${mi.marketSentiment.positiveRatio}%</p>
+                                            <p>Negative: ${mi.marketSentiment.negativeRatio}%</p>
+                                        </div>
+                                    </div>
+                                ` : '<p class="text-gray-500">Analyzing sentiment...</p>'}
+                            </div>
+
+                            <!-- Recent Steel Industry News -->
+                            <div class="lg:col-span-2 bg-white rounded-lg shadow p-6">
+                                <div class="flex justify-between items-center mb-4">
+                                    <h3 class="text-lg font-semibold">Steel Industry News</h3>
+                                    <button onclick="app.fetchMarketNews()" 
+                                        class="text-sm text-blue-600 hover:text-blue-800">
+                                        ${this.icon('RefreshCw', 16, 'inline')} Refresh
+                                    </button>
+                                </div>
+                                <div class="space-y-3 max-h-80 overflow-y-auto">
+                                    ${(mi.marketNews || []).slice(0, 8).map(article => `
+                                        <div class="border-l-4 ${
+                                            article.sentiment === 'positive' ? 'border-green-500 bg-green-50' :
+                                            article.sentiment === 'negative' ? 'border-red-500 bg-red-50' :
+                                            'border-gray-500 bg-gray-50'
+                                        } p-3 rounded">
+                                            <div class="flex justify-between items-start">
+                                                <div class="flex-1">
+                                                    <h4 class="font-medium text-sm leading-tight">
+                                                        <a href="${article.url}" target="_blank" class="hover:text-blue-600">
+                                                            ${article.title}
+                                                        </a>
+                                                    </h4>
+                                                    <p class="text-xs text-gray-600 mt-1 line-clamp-2">${article.description}</p>
+                                                    <div class="flex justify-between items-center mt-2">
+                                                        <span class="text-xs text-gray-500">${article.source}</span>
+                                                        <span class="text-xs text-gray-500">
+                                                            ${new Date(article.publishedAt).toLocaleDateString()}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <span class="ml-2 px-2 py-1 text-xs rounded-full ${
+                                                    article.sentiment === 'positive' ? 'bg-green-100 text-green-800' :
+                                                    article.sentiment === 'negative' ? 'bg-red-100 text-red-800' :
+                                                    'bg-gray-100 text-gray-800'
+                                                }">
+                                                    ${article.sentiment}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recommendations and Recent Changes -->
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <!-- Actionable Recommendations -->
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <h3 class="text-lg font-semibold mb-4">Actionable Recommendations</h3>
+                                <div class="space-y-4">
+                                    ${(mi.recommendations || []).map(rec => `
+                                        <div class="border-l-4 ${
+                                            rec.priority === 'high' ? 'border-red-500 bg-red-50' :
+                                            rec.priority === 'medium' ? 'border-yellow-500 bg-yellow-50' :
+                                            'border-green-500 bg-green-50'
+                                        } p-4 rounded">
+                                            <div class="flex justify-between items-start">
+                                                <div>
+                                                    <h4 class="font-semibold text-sm">${rec.title}</h4>
+                                                    <p class="text-sm text-gray-600 mt-1">${rec.description}</p>
+                                                    <p class="text-xs text-blue-600 mt-2 font-medium">${rec.action}</p>
+                                                </div>
+                                                <span class="px-2 py-1 text-xs rounded-full ${
+                                                    rec.priority === 'high' ? 'bg-red-100 text-red-800' :
+                                                    rec.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                                                    'bg-green-100 text-green-800'
+                                                }">
+                                                    ${rec.priority}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+
+                            <!-- Recent Market Changes -->
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <h3 class="text-lg font-semibold mb-4">Recent Market Changes</h3>
+                                <div class="space-y-3">
+                                    ${(mi.competitorData.recentChanges || []).map(change => `
+                                        <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded">
+                                            <div class="flex-shrink-0">
+                                                ${change.type === 'price_increase' ? this.icon('TrendingUp', 16, 'text-red-500') :
+                                                  change.type === 'price_decrease' ? this.icon('TrendingDown', 16, 'text-green-500') :
+                                                  this.icon('Package', 16, 'text-blue-500')}
+                                            </div>
+                                            <div class="flex-1">
+                                                <p class="text-sm font-medium">${change.company}</p>
+                                                <p class="text-sm text-gray-600">${change.change}</p>
+                                                <p class="text-xs text-gray-500">${new Date(change.date).toLocaleDateString()}</p>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Last Updated Info -->
+                        <div class="mt-6 text-center text-sm text-gray-500">
+                            Last updated: ${mi.steelPrices.lastUpdated ? new Date(mi.steelPrices.lastUpdated).toLocaleString() : 'Never'}
+                            <br>
+                            Data sources: Commodities API, Market Intelligence Services
+                        </div>
+                    </div>
+                `;
+            }
+
+            renderPriceChart() {
+                const historical = this.state.marketIntelligence.steelPrices.historical;
+                if (!historical || historical.length === 0) {
+                    return '<div class="flex items-center justify-center h-full text-gray-500">No historical data available</div>';
+                }
+
+                // Simple ASCII-style chart (in production, use Chart.js or similar)
+                const maxPrice = Math.max(...historical.map(item => item.price));
+                const minPrice = Math.min(...historical.map(item => item.price));
+                const priceRange = maxPrice - minPrice || 1;
+
+                return `
+                    <div class="space-y-2">
+                        ${historical.slice(-7).map((item, index) => {
+                            const height = ((item.price - minPrice) / priceRange) * 200;
+                            return `
+                                <div class="flex items-end justify-between text-xs">
+                                    <span>${new Date(item.date).toLocaleDateString()}</span>
+                                    <div class="flex items-end space-x-1">
+                                        <div class="bg-blue-500 rounded-t" style="width: 20px; height: ${height}px; min-height: 10px;"></div>
+                                        <span>$${item.price.toFixed(2)}</span>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+            }
 
             // Continue with Google Calendar initialization
             async initGoogleCalendar() {
