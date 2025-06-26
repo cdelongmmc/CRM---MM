@@ -49,176 +49,183 @@
             https://fonts.gstatic.com;
     ">
     
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        /* Mobile-specific optimizations */
-        @media (max-width: 1024px) {
-            button, a, input, select, textarea {
-                min-height: 44px;
-            }
-            
-            * {
-                -webkit-overflow-scrolling: touch;
-            }
-            
-            .safe-top {
-                padding-top: env(safe-area-inset-top);
-            }
-            
-            .safe-bottom {
-                padding-bottom: env(safe-area-inset-bottom);
-            }
-            
-            button, nav {
-                -webkit-user-select: none;
-                user-select: none;
-            }
-            
-            input, select, textarea {
-                font-size: 16px;
-            }
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+    /* Mobile-specific optimizations */
+    @media (max-width: 1024px) {
+        button, a, input, select, textarea {
+            min-height: 44px;
         }
         
-        @supports (height: 100dvh) {
-            .min-h-screen {
-                min-height: 100dvh;
-            }
+        * {
+            -webkit-overflow-scrolling: touch;
         }
+        
+        .safe-top {
+            padding-top: env(safe-area-inset-top);
+        }
+        
+        .safe-bottom {
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        
+        button, nav {
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        
+        input, select, textarea {
+            font-size: 16px;
+        }
+    }
+    
+    @supports (height: 100dvh) {
+        .min-h-screen {
+            min-height: 100dvh;
+        }
+    }
 
-        /* Fix for navigation scroll and Market Intel button visibility */
+    /* Fix for navigation scroll and Market Intel button visibility */
+    nav.space-y-2 {
+        max-height: calc(100vh - 200px);
+        overflow-y: auto;
+        padding-bottom: 40px;
+    }
+
+    nav.space-y-2 button {
+        position: relative;
+        z-index: 10;
+        width: 100%;
+        cursor: pointer;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+
+    nav.space-y-2::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    nav.space-y-2::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 3px;
+    }
+
+    nav.space-y-2::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 3px;
+    }
+
+    nav.space-y-2::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.5);
+    }
+
+    /* Ensure mobile menu shows all items */
+    @media (max-width: 1024px) {
         nav.space-y-2 {
-            max-height: calc(100vh - 200px);
-            overflow-y: auto;
-            padding-bottom: 40px;
+            max-height: calc(100vh - 150px);
         }
+    }
 
-        nav.space-y-2 button {
-            position: relative;
-            z-index: 10;
-            width: 100%;
-            cursor: pointer;
-            min-height: 44px;
-            display: flex;
-            align-items: center;
-        }
+    /* Form sections styling */
+    .form-section {
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
 
-        nav.space-y-2::-webkit-scrollbar {
-            width: 6px;
-        }
+    .form-section-title {
+        font-weight: 600;
+        margin-bottom: 0.75rem;
+        color: #374151;
+    }
 
-        nav.space-y-2::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 3px;
-        }
+    /* Character counter styling */
+    .char-counter {
+        font-size: 0.75rem;
+        color: #6b7280;
+        text-align: right;
+        margin-top: 0.25rem;
+    }
 
-        nav.space-y-2::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 3px;
-        }
+    /* URL input validation */
+    input[type="url"]:invalid {
+        border-color: #ef4444;
+    }
 
-        nav.space-y-2::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.5);
-        }
+    input[type="url"]:valid {
+        border-color: #10b981;
+    }
 
-        /* Ensure mobile menu shows all items */
-        @media (max-width: 1024px) {
-            nav.space-y-2 {
-                max-height: calc(100vh - 150px);
-            }
-        }
+    /* Drag and drop styles */
+    .dragging {
+        opacity: 0.5;
+    }
 
-        /* Form sections styling */
-        .form-section {
-            border: 1px solid #e5e7eb;
-            border-radius: 0.5rem;
-            padding: 1rem;
-            margin-bottom: 1rem;
-        }
+    /* Recording animation */
+    .recording {
+        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
 
-        .form-section-title {
-            font-weight: 600;
-            margin-bottom: 0.75rem;
-            color: #374151;
-        }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: .5; }
+    }
 
-        /* Character counter styling */
-        .char-counter {
-            font-size: 0.75rem;
-            color: #6b7280;
-            text-align: right;
-            margin-top: 0.25rem;
-        }
+    /* Checkbox styles */
+    .bulk-checkbox {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+    }
 
-        /* URL input validation */
-        input[type="url"]:invalid {
-            border-color: #ef4444;
-        }
+    /* Product tag */
+    .product-tag {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        background-color: #e5e7eb;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        margin: 0.125rem;
+    }
 
-        input[type="url"]:valid {
-            border-color: #10b981;
-        }
+    /* Contact section styles */
+    .contact-section {
+        background-color: #f9fafb;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
 
-        /* Drag and drop styles */
-        .dragging {
-            opacity: 0.5;
-        }
+    .remove-contact-btn {
+        background-color: #ef4444;
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.875rem;
+    }
 
-        /* Recording animation */
-        .recording {
-            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
+    .remove-contact-btn:hover {
+        background-color: #dc2626;
+    }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: .5; }
-        }
+    /* Line clamp for text truncation */
+    .line-clamp-2 {
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
 
-        /* Checkbox styles */
-        .bulk-checkbox {
-            width: 20px;
-            height: 20px;
-            cursor: pointer;
-        }
-
-        /* Product tag */
-        .product-tag {
-            display: inline-block;
-            padding: 0.25rem 0.5rem;
-            background-color: #e5e7eb;
-            border-radius: 0.25rem;
-            font-size: 0.75rem;
-            margin: 0.125rem;
-        }
-
-        /* Contact section styles */
-        .contact-section {
-            background-color: #f9fafb;
-            border-radius: 0.5rem;
-            padding: 1rem;
-            margin-bottom: 1rem;
-        }
-
-        .remove-contact-btn {
-            background-color: #ef4444;
-            color: white;
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.25rem;
-            font-size: 0.875rem;
-        }
-
-        .remove-contact-btn:hover {
-            background-color: #dc2626;
-        }
-
-        /* Line clamp for text truncation */
-        .line-clamp-2 {
-            overflow: hidden;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            line-clamp: 2;
-            -webkit-box-orient: vertical;
-        }
-    </style>
+    /* Fix for chart container - ADD IT HERE AT THE END */
+    .market-chart-container {
+        min-height: 256px;
+        display: flex;
+        flex-direction: column;
+    }
+</style>
 </head>
 <body>
     <div id="app"></div>
@@ -475,8 +482,19 @@
                 });
             }
 
-            // Market Intelligence Methods
             setupMarketIntelligenceRefresh() {
+                // Initial load with error handling
+                Promise.all([
+                    this.fetchSteelPrices().catch(err => console.error('Error fetching steel prices:', err)),
+                    this.fetchCompetitorIntelligence().catch(err => console.error('Error fetching competitor data:', err)),
+                    this.fetchMarketNews().catch(err => console.error('Error fetching news:', err))
+                ]).then(() => {
+                    // Ensure competitor data is set even if fetch failed
+                    if (!this.state.marketIntelligence.competitorData.averageMarketPrice) {
+                        this.fetchCompetitorIntelligence();
+                    }
+                });
+
                 // Refresh market data every 30 minutes
                 setInterval(() => {
                     if (this.state.activeView === 'market-intelligence') {
@@ -598,28 +616,26 @@
             }
 
             generateMockHistoricalData(currentData) {
-                if (!currentData) return [];
-                
-                const currentPrice = parseFloat(currentData.Price);
+                const currentPrice = currentData ? parseFloat(currentData.Price) : 775.50;
                 const historical = [];
-                
+
                 // Generate 30 days of historical data with realistic variations
                 for (let i = 29; i >= 0; i--) {
                     const date = new Date();
                     date.setDate(date.getDate() - i);
-                    
+
                     // Create realistic price movements (±2% daily variation)
                     const baseVariation = (Math.random() - 0.5) * 0.04; // ±2%
                     const trendFactor = i / 30 * 0.1; // Slight upward trend over 30 days
                     const price = currentPrice * (1 + baseVariation - trendFactor);
-                    
+
                     historical.push({
                         date: date.toISOString().split('T')[0],
                         price: Math.round(price * 100) / 100,
                         timestamp: date.getTime()
                     });
                 }
-                
+
                 return historical;
             }
 
@@ -670,12 +686,14 @@
 
             async fetchCompetitorIntelligence() {
                 try {
-                    // Simulate competitor pricing data
-                    const mockCompetitorData = {
-                        averageMarketPrice: this.state.marketIntelligence.steelPrices.current?.steel * 1.05,
+                    // Always set competitor data immediately (don't wait for API)
+                    const currentSteelPrice = this.state.marketIntelligence.steelPrices.current?.steel || 775.50;
+
+                    this.state.marketIntelligence.competitorData = {
+                        averageMarketPrice: currentSteelPrice * 1.05,
                         priceRange: {
-                            min: this.state.marketIntelligence.steelPrices.current?.steel * 0.95,
-                            max: this.state.marketIntelligence.steelPrices.current?.steel * 1.15
+                            min: currentSteelPrice * 0.95,
+                            max: currentSteelPrice * 1.15
                         },
                         marketShare: {
                             'Nucor': 15.2,
@@ -691,10 +709,13 @@
                             { company: 'US Steel', change: 'New EAF facility', date: '2025-01-05', type: 'capacity_expansion' }
                         ]
                     };
-                    
-                    this.state.marketIntelligence.competitorData = mockCompetitorData;
+
+                    // Update the view
+                    if (this.state.activeView === 'market-intelligence') {
+                        this.render();
+                    }
                 } catch (error) {
-                    console.error('Error fetching competitor data:', error);
+                    console.error('Error in fetchCompetitorIntelligence:', error);
                 }
             }
 
@@ -936,8 +957,8 @@
                                 <p class="text-sm text-gray-600">Price standard deviation</p>
                                 <div class="mt-4">
                                     <div class="w-full bg-gray-200 rounded-full h-2">
-                                        <div class="bg-${parseFloat(trends?.volatility || 0) > 50 ? 'red' : parseFloat(trends?.volatility || 0) > 25 ? 'yellow' : 'green'}-500 h-2 rounded-full" 
-                                            style="width: ${Math.min(parseFloat(trends?.volatility || 0), 100)}%"></div>
+                                         <div class="${parseFloat(trends?.volatility || 0) > 50 ? 'bg-red-500' : parseFloat(trends?.volatility || 0) > 25 ? 'bg-yellow-500' : 'bg-green-500'} h-2 rounded-full" 
+                                                style="width: ${Math.min(parseFloat(trends?.volatility || 0), 100)}%"></div>
                                     </div>
                                 </div>
                             </div>
@@ -1138,24 +1159,34 @@
             renderPriceChart() {
                 const historical = this.state.marketIntelligence.steelPrices.historical;
                 if (!historical || historical.length === 0) {
-                    return '<div class="flex items-center justify-center h-full text-gray-500">No historical data available</div>';
+                    return `<div class="flex items-center justify-center h-full text-gray-500">
+                        No historical data available
+                    </div>`;
                 }
 
-                // Simple ASCII-style chart (in production, use Chart.js or similar)
-                const maxPrice = Math.max(...historical.map(item => item.price));
-                const minPrice = Math.min(...historical.map(item => item.price));
-                const priceRange = maxPrice - minPrice || 1;
+                // Get last 7 days of data
+                const last7Days = historical.slice(-7);
+                const maxPrice = Math.max(...last7Days.map(item => item.price));
+                const minPrice = Math.min(...last7Days.map(item => item.price));
+                const priceRange = maxPrice - minPrice || 1; // Prevent division by zero
 
                 return `
-                    <div class="space-y-2">
-                        ${historical.slice(-7).map((item, index) => {
-                            const height = ((item.price - minPrice) / priceRange) * 200;
+                    <div class="h-full flex items-end justify-between space-x-2 px-4">
+                        ${last7Days.map(item => {
+                            const heightPercent = ((item.price - minPrice) / priceRange) * 80 + 20; // Min 20% height
+                            const date = new Date(item.date);
+                            const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
                             return `
-                                <div class="flex items-end justify-between text-xs">
-                                    <span>${new Date(item.date).toLocaleDateString()}</span>
-                                    <div class="flex items-end space-x-1">
-                                        <div class="bg-blue-500 rounded-t" style="width: 20px; height: ${height}px; min-height: 10px;"></div>
-                                        <span>$${item.price.toFixed(2)}</span>
+                                <div class="flex-1 flex flex-col items-center justify-end">
+                                    <div class="text-xs font-medium mb-1">
+                                        $${item.price.toFixed(0)}
+                                    </div>
+                                    <div class="w-full bg-blue-500 rounded-t transition-all duration-300 hover:bg-blue-600"
+                                         style="height: ${heightPercent}%; min-height: 20px;"
+                                         title="$${item.price.toFixed(2)} on ${item.date}">
+                                    </div>
+                                    <div class="text-xs text-gray-600 mt-1">
+                                        ${dateStr}
                                     </div>
                                 </div>
                             `;
