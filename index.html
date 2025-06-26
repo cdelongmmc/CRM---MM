@@ -2662,8 +2662,71 @@
                         return this.renderQuotes();
                     case 'activities':
                         return this.renderActivities();
-                    case 'market-intelligence':
-                        return this.renderMarketIntelligenceDashboard();
+                    // ...existing code...
+                    
+                                // Add this helper method to render the Market Intelligence section
+                                renderMarketIntelligenceSection() {
+                                    const mi = this.state.marketIntelligence;
+                                    if (mi.isLoading) {
+                                        return `<div class="text-gray-500 flex items-center">${this.icon('RefreshCw', 18, 'animate-spin mr-2')} Loading market data...</div>`;
+                                    }
+                                    if (!mi.steelPrices.current) {
+                                        return `<div class="text-gray-400">No market data available.</div>`;
+                                    }
+                                    return `
+                                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                                            <div class="bg-white rounded-lg shadow p-4">
+                                                <h4 class="font-semibold mb-2">Steel Price</h4>
+                                                <p class="text-2xl font-bold">$${mi.steelPrices.current.steel?.toLocaleString() || '-'} <span class="text-sm text-gray-500">${mi.steelPrices.current.unit || ''}</span></p>
+                                                <p class="text-sm text-gray-600">Last update: ${mi.steelPrices.current.lastUpdate || '-'}</p>
+                                                <p class="text-sm ${mi.steelPrices.current.steelChange > 0 ? 'text-green-600' : mi.steelPrices.current.steelChange < 0 ? 'text-red-600' : 'text-gray-600'}">
+                                                    ${mi.steelPrices.current.steelChange > 0 ? '+' : ''}${mi.steelPrices.current.steelChange || 0}% today
+                                                </p>
+                                            </div>
+                                            <div class="bg-white rounded-lg shadow p-4">
+                                                <h4 class="font-semibold mb-2">Market Trends</h4>
+                                                <p class="text-sm">Direction: <span class="font-semibold">${mi.marketTrends.priceDirection || '-'}</span></p>
+                                                <p class="text-sm">Change: <span class="font-semibold">${mi.marketTrends.priceChangePercent || '-'}%</span></p>
+                                                <p class="text-sm">Volatility: <span class="font-semibold">${mi.marketTrends.volatility || '-'}</span></p>
+                                                <p class="text-sm">Demand: <span class="font-semibold">${mi.marketTrends.demandForecast || '-'}</span></p>
+                                            </div>
+                                            <div class="bg-white rounded-lg shadow p-4">
+                                                <h4 class="font-semibold mb-2">Competitor Data</h4>
+                                                <p class="text-sm">Avg Market Price: <span class="font-semibold">$${mi.competitorData.averageMarketPrice?.toLocaleString() || '-'}</span></p>
+                                                <p class="text-sm">Price Range: <span class="font-semibold">$${mi.competitorData.priceRange.min?.toLocaleString() || '-'} - $${mi.competitorData.priceRange.max?.toLocaleString() || '-'}</span></p>
+                                                <p class="text-sm">Market Share:</p>
+                                                <ul class="ml-4 text-xs">
+                                                    ${Object.entries(mi.competitorData.marketShare || {}).map(([k, v]) => `<li>${k}: ${v}%</li>`).join('')}
+                                                </ul>
+                                            </div>
+                                        </div>
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div class="bg-white rounded-lg shadow p-4">
+                                                <h4 class="font-semibold mb-2">Recommendations</h4>
+                                                <ul class="list-disc ml-6">
+                                                    ${(mi.recommendations || []).map(rec => `
+                                                        <li class="mb-2">
+                                                            <span class="font-semibold">${rec.title}:</span> ${rec.description}
+                                                            <br><span class="text-xs text-gray-500">Action: ${rec.action}</span>
+                                                        </li>
+                                                    `).join('') || '<li>No recommendations at this time.</li>'}
+                                                </ul>
+                                            </div>
+                                            <div class="bg-white rounded-lg shadow p-4">
+                                                <h4 class="font-semibold mb-2">Recent Market News</h4>
+                                                <ul class="space-y-2">
+                                                    ${(mi.marketNews || []).slice(0, 5).map(news => `
+                                                        <li>
+                                                            <a href="${news.url}" target="_blank" class="font-semibold text-blue-700 hover:underline">${news.title}</a>
+                                                            <div class="text-xs text-gray-500">${news.source} • ${news.publishedAt ? news.publishedAt.split('T')[0] : ''}</div>
+                                                            <div class="text-xs">${news.description || ''}</div>
+                                                        </li>
+                                                    `).join('') || '<li>No news available.</li>'}
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    `;
+                                }
                     default:
                         return this.renderDashboard();
                 }
