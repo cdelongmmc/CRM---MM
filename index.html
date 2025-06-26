@@ -87,40 +87,43 @@
 
         /* Fix for navigation scroll and Market Intel button visibility */
         nav.space-y-2 {
-            max-height: calc(100vh - 300px);
+            max-height: calc(100vh - 200px);
             overflow-y: auto;
-            padding-bottom: 20px;
+            padding-bottom: 40px;
         }
-        
-        nav button {
+
+        nav.space-y-2 button {
             position: relative;
             z-index: 10;
             width: 100%;
             cursor: pointer;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
         }
-        
+
         nav.space-y-2::-webkit-scrollbar {
             width: 6px;
         }
-        
+
         nav.space-y-2::-webkit-scrollbar-track {
             background: rgba(255, 255, 255, 0.1);
             border-radius: 3px;
         }
-        
+
         nav.space-y-2::-webkit-scrollbar-thumb {
             background: rgba(255, 255, 255, 0.3);
             border-radius: 3px;
         }
-        
+
         nav.space-y-2::-webkit-scrollbar-thumb:hover {
             background: rgba(255, 255, 255, 0.5);
         }
-        
+
         /* Ensure mobile menu shows all items */
         @media (max-width: 1024px) {
             nav.space-y-2 {
-                max-height: calc(100vh - 200px);
+                max-height: calc(100vh - 150px);
             }
         }
 
@@ -2714,7 +2717,7 @@
                             ` : ''}
                         </div>
                         
-                        <nav class="space-y-2 flex-1">
+                        <nav class="space-y-2 flex-1 overflow-y-auto" style="max-height: calc(100vh - 250px);">
                             ${[
                                 { id: 'dashboard', icon: 'BarChart3', label: 'Dashboard' },
                                 { id: 'customers', icon: 'Users', label: 'Customers' },
@@ -2723,10 +2726,11 @@
                                 { id: 'activities', icon: 'Calendar', label: 'Activities' },
                                 { id: 'market-intelligence', icon: 'TrendingUp', label: 'Market Intel' }
                             ].map(item => `
-                                <button onclick="app.setView('${item.id}')" 
-                                        class="w-full flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors ${
-                                            this.state.activeView === item.id ? 'bg-blue-600' : 'hover:bg-gray-800'
-                                        }">
+                                <button 
+                                    onclick="app.setView('${item.id}')"
+                                    class="w-full flex items-center space-x-3 px-4 py-2 rounded-lg transition-colors
+                                        ${this.state.activeView === item.id ? 'bg-blue-600' : 'hover:bg-gray-800'}"
+                                >
                                     ${this.icon(item.icon, 20)}
                                     <span>${item.label}</span>
                                 </button>
