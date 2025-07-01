@@ -2837,8 +2837,8 @@ if (!window.firebase.auth().currentUser) {
                         customerId: customer.id,
                         type: 'call',
                         subject: `Follow up with ${customer.name}`,
-                        date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                        time: '10:00 AM',
+                        date: new Date(Date.now()).toISOString().split('T')[0],
+                        time: '2:00 PM',
                         notes: ''
                     };
                     this.state.showModal = 'activity';
@@ -2854,8 +2854,8 @@ if (!window.firebase.auth().currentUser) {
                         opportunityId: opp.id,
                         subject: `Follow up: ${opp.title}`,
                         type: 'call',
-                        date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                        time: '10:00 AM',
+                        date: new Date(Date.now()).toISOString().split('T')[0],
+                        time: '2:00 PM',
                         notes: ''
                     };
                     this.state.showModal = 'activity';
@@ -4028,7 +4028,7 @@ if (!window.firebase.auth().currentUser) {
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-1">Time</label>
                                         <input type="text" id="followup-time"
-                                               value="10:00 AM"
+                                               value="2:00 PM"
                                                class="w-full p-2 border rounded-lg">
                                     </div>
                                 </div>
@@ -4814,9 +4814,9 @@ if (!window.firebase.auth().currentUser) {
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700 mb-1">Time *</label>
                                             <input type="text" required
-                                                   value="${this.state.formData.time || '10:00 AM'}"
+                                                   value="${this.state.formData.time || '2:00 PM'}"
                                                    oninput="app.updateFormField('time', this.value)"
-                                                   placeholder="10:00 AM"
+                                                   placeholder="2:00 PM"
                                                    class="w-full p-2 border rounded-lg">
                                         </div>
                                     </div>
