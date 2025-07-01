@@ -453,18 +453,33 @@
             async setupFirebase() {
                 if (FIREBASE_CONFIG.apiKey !== "YOUR-API-KEY") {
                     this.state.isFirebaseConfigured = true;
-                    
+
                     try {
                         await this.loadScript('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js');
+                        await this.loadScript('https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js');
                         await this.loadScript('https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js');
                         await this.loadScript('https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js');
-                        
+
                         if (window.firebase) {
-                            window.firebase.initializeApp(FIREBASE_CONFIG);
-                            this.state.firebaseDb = window.firebase.database();
-                            this.state.firebaseStorage = window.firebase.storage();
-                            this.setupFirebaseListeners();
-                        }
+    window.firebase.initializeApp(FIREBASE_CONFIG);
+    this.state.firebaseDb = window.firebase.database();
+    this.state.firebaseStorage = window.firebase.storage();
+    this.state.firebaseAuth = window.firebase.auth();
+    
+    // Enable anonymous authentication by default
+    window.firebase.auth().onAuthStateChanged(async (user) => {
+        if (!user) {
+            try {
+                await window.firebase.auth().signInAnonymously();
+                console.log('Auto-signed in anonymously for Firebase operations');
+            } catch (error) {
+                console.error('Auto anonymous sign-in failed:', error);
+            }
+        }
+    });
+    
+    this.setupFirebaseListeners();
+}
                     } catch (error) {
                         console.error('Error loading Firebase:', error);
                         this.state.isFirebaseConfigured = false;
@@ -2271,19 +2286,20 @@
             }
 
             // NEW: Add authentication check
-            if (!firebase.auth().currentUser) {
-                if (confirm('You need to sign in to upload files. Create a temporary account?')) {
-                    try {
-                        await firebase.auth().signInAnonymously();
-                        console.log('Signed in anonymously for upload');
-                    } catch (error) {
-                        alert('Could not create temporary account: ' + error.message);
-                        return;
-                    }
-                } else {
-                    return;
-                }
-            }
+            // NEW: Add authentication check
+if (!window.firebase.auth().currentUser) {
+    if (confirm('You need to sign in to upload files. Create a temporary account?')) {
+        try {
+            await window.firebase.auth().signInAnonymously();
+            console.log('Signed in anonymously for upload');
+        } catch (error) {
+            alert('Could not create temporary account: ' + error.message);
+            return;
+        }
+    } else {
+        return;
+    }
+}
 
             this.state.uploadingFile = true;
             this.render();
