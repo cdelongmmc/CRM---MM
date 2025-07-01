@@ -930,7 +930,7 @@
                 return `
                     <div class="bg-white rounded-lg shadow p-4">
                         <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-lg font-semibold">Team Calendar</h3>
+                            <h3 class="text-lg font-semibold">Calendar</h3>
                             <button onclick="app.state.showOutlookCalendar = !app.state.showOutlookCalendar; app.render()"
                                     class="text-sm text-blue-600 hover:text-blue-800">
                                 ${this.state.showOutlookCalendar ? 'Hide' : 'Show'} Calendar
@@ -945,7 +945,7 @@
                                     frameborder="0"
                                     scrolling="yes"
                                     class="rounded-lg border"
-                                    title="Major Metals Team Calendar">
+                                    title="Calendar">
                                 </iframe>
                             </div>
                         ` : ''}
@@ -3286,7 +3286,7 @@ if (!window.firebase.auth().currentUser) {
                             </div>
                         </div>
 
-                        <!-- Team Calendar Section -->
+                        <!-- Calendar Section -->
                         <div class="mt-6">
                             ${this.renderOutlookCalendar()}
                         </div>
