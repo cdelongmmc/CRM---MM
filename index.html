@@ -2257,72 +2257,87 @@
                 }
             }
 
-            // File Upload
-            async handleFileUpload(event, customerId) {
-                const file = event.target.files[0];
-                if (!file || file.type !== 'application/pdf') {
-                    alert('Please select a PDF file');
-                    return;
-                }
-                
-                if (file.size > 10 * 1024 * 1024) { // 10MB limit
-                    alert('File size must be less than 10MB');
-                    return;
-                }
-                
-                this.state.uploadingFile = true;
-                this.render();
-                
-                try {
-                    if (this.state.firebaseStorage && this.state.isOnline) {
-                        const timestamp = Date.now();
-                        const fileName = `customers/${customerId || 'temp'}/${timestamp}_${file.name}`;
-                        const storageRef = this.state.firebaseStorage.ref(fileName);
-                        
-                        const snapshot = await storageRef.put(file);
-                        const downloadURL = await snapshot.ref.getDownloadURL();
-                        
-                        // Add file info to customer or form data
-                        const target = customerId ? 
-                            this.state.customers.find(c => c.id === customerId) : 
-                            this.state.formData;
-                            
-                        if (!target.attachments) {
-                            target.attachments = [];
-                        }
-                        
-                        target.attachments.push({
-                            id: timestamp.toString(),
-                            name: file.name,
-                            url: downloadURL,
-                            uploadedAt: new Date().toISOString(),
-                            size: file.size
-                        });
-                        
-                        if (customerId) {
-                            // Update existing customer
-                            this.saveAllToLocalStorage();
-                            
-                            if (this.state.firebaseDb) {
-                                await this.state.firebaseDb.ref(`customers/${customerId}`).set(
-                                    this.state.customers.find(c => c.id === customerId)
-                                );
-                            }
-                        }
-                        
-                        alert('File uploaded successfully');
-                        this.render();
-                    } else {
-                        alert('File upload requires online connection and Firebase configuration');
+        // File Upload
+        async handleFileUpload(event, customerId) {
+            const file = event.target.files[0];
+            if (!file || file.type !== 'application/pdf') {
+                alert('Please select a PDF file');
+                return;
+            }
+
+            if (file.size > 10 * 1024 * 1024) { // 10MB limit
+                alert('File size must be less than 10MB');
+                return;
+            }
+
+            // NEW: Add authentication check
+            if (!firebase.auth().currentUser) {
+                if (confirm('You need to sign in to upload files. Create a temporary account?')) {
+                    try {
+                        await firebase.auth().signInAnonymously();
+                        console.log('Signed in anonymously for upload');
+                    } catch (error) {
+                        alert('Could not create temporary account: ' + error.message);
+                        return;
                     }
-                } catch (error) {
-                    console.error('Error uploading file:', error);
-                    alert('Error uploading file. Please try again.');
-                } finally {
-                    this.state.uploadingFile = false;
-                    this.render();
+                } else {
+                    return;
                 }
             }
+
+            this.state.uploadingFile = true;
+            this.render();
+
+            try {
+                if (this.state.firebaseStorage && this.state.isOnline) {
+                    const timestamp = Date.now();
+                    const fileName = `customers/${customerId || 'temp'}/${timestamp}_${file.name}`;
+                    const storageRef = this.state.firebaseStorage.ref(fileName);
+
+                    const snapshot = await storageRef.put(file);
+                    const downloadURL = await snapshot.ref.getDownloadURL();
+
+                    // Add file info to customer or form data
+                    const target = customerId ?
+                        this.state.customers.find(c => c.id === customerId) :
+                        this.state.formData;
+
+                    if (!target.attachments) {
+                        target.attachments = [];
+                    }
+
+                    target.attachments.push({
+                        id: timestamp.toString(),
+                        name: file.name,
+                        url: downloadURL,
+                        uploadedAt: new Date().toISOString(),
+                        size: file.size
+                    });
+
+                    if (customerId) {
+                        // Update existing customer
+                        this.saveAllToLocalStorage();
+
+                        if (this.state.firebaseDb) {
+                            await this.state.firebaseDb.ref(`customers/${customerId}`).set(
+                                this.state.customers.find(c => c.id === customerId)
+                            );
+                        }
+                    }
+
+                    alert('File uploaded successfully');
+                    this.render();
+                } else {
+                    alert('File upload requires online connection and Firebase configuration');
+                }
+            } catch (error) {
+                console.error('Error uploading file:', error);
+                alert('Error uploading file. Please try again.');
+            } finally {
+                this.state.uploadingFile = false;
+                this.render();
+            }
+        }
 
             async deleteAttachment(customerId, attachmentId) {
                 if (!confirm('Are you sure you want to delete this attachment?')) return;
