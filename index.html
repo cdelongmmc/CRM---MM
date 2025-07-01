@@ -372,6 +372,7 @@
                     recordingTime: 0,
                     recordingTimer: null,
                     googleCalendarConnected: false,
+                    showOutlookCalendar: true,
                     showCompletedActivities: false,
                     customerDetailTab: 'opportunities',
                     viewingCustomerId: null,
@@ -925,7 +926,32 @@
                 
                 this.state.marketIntelligence.recommendations = recommendations;
             }
-            // Market Intelligence Dashboard UI
+            renderOutlookCalendar() {
+                return `
+                    <div class="bg-white rounded-lg shadow p-4">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-semibold">Team Calendar</h3>
+                            <button onclick="app.state.showOutlookCalendar = !app.state.showOutlookCalendar; app.render()"
+                                    class="text-sm text-blue-600 hover:text-blue-800">
+                                ${this.state.showOutlookCalendar ? 'Hide' : 'Show'} Calendar
+                            </button>
+                        </div>
+                        ${this.state.showOutlookCalendar ? `
+                            <div class="outlook-calendar-container">
+                                <iframe 
+                                    src="https://outlook.office365.com/owa/calendar/61b5c0f923a0429e89fc69cd776baed0@majormetals.net/f2f6d9700e984357b0c199445831279717181899577534358451/calendar.html"
+                                    width="100%"
+                                    height="600"
+                                    frameborder="0"
+                                    scrolling="yes"
+                                    class="rounded-lg border"
+                                    title="Major Metals Team Calendar">
+                                </iframe>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
             renderMarketIntelligenceDashboard() {
                 const mi = this.state.marketIntelligence;
                 const steelPrice = mi.steelPrices.current?.steel;
@@ -3146,11 +3172,11 @@ if (!window.firebase.auth().currentUser) {
 
             renderDashboard() {
                 const metrics = this.getMetrics();
-                
+
                 return `
                     <div class="p-4 lg:p-8">
                         <h2 class="text-2xl lg:text-3xl font-bold mb-6 lg:mb-8">Sales Dashboard</h2>
-                        
+
                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 mb-6 lg:mb-8">
                             <div class="bg-white rounded-lg shadow p-4 lg:p-6">
                                 <div class="flex items-center justify-between mb-4">
@@ -3160,7 +3186,7 @@ if (!window.firebase.auth().currentUser) {
                                 <p class="text-2xl font-bold">${metrics.openOpportunities}</p>
                                 <p class="text-sm text-gray-600">$${(metrics.totalPipeline / 1000).toFixed(0)}K in pipeline</p>
                             </div>
-                            
+
                             <div class="bg-white rounded-lg shadow p-4 lg:p-6">
                                 <div class="flex items-center justify-between mb-4">
                                     ${this.icon('DollarSign', 24, 'text-green-500')}
@@ -3168,7 +3194,7 @@ if (!window.firebase.auth().currentUser) {
                                 </div>
                                 <p class="text-2xl font-bold">$${(metrics.wonDeals / 1000).toFixed(0)}K</p>
                             </div>
-                            
+
                             <div class="bg-white rounded-lg shadow p-4 lg:p-6">
                                 <div class="flex items-center justify-between mb-4">
                                     ${this.icon('TrendingUp', 24, 'text-purple-500')}
@@ -3176,7 +3202,7 @@ if (!window.firebase.auth().currentUser) {
                                 </div>
                                 <p class="text-2xl font-bold">${metrics.winRate}%</p>
                             </div>
-                            
+
                             <div class="bg-white rounded-lg shadow p-4 lg:p-6">
                                 <div class="flex items-center justify-between mb-4">
                                     ${this.icon('Users', 24, 'text-orange-500')}
@@ -3185,7 +3211,7 @@ if (!window.firebase.auth().currentUser) {
                                 <p class="text-2xl font-bold">${metrics.activeCustomers}</p>
                             </div>
                         </div>
-                        
+
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
                             <div class="bg-white rounded-lg shadow p-4 lg:p-6">
                                 <div class="flex justify-between items-center mb-4">
@@ -3210,8 +3236,8 @@ if (!window.firebase.auth().currentUser) {
                                                         activity.completed ? 'cursor-pointer hover:bg-gray-100' : ''
                                                     }" ${activity.completed ? `onclick="app.viewActivity('${activity.id}')"` : ''}>
                                                         <div class="flex items-center space-x-3">
-                                                            ${activity.type === 'call' ? this.icon('Phone', 16) : 
-                                                              activity.type === 'email' ? this.icon('Mail', 16) : 
+                                                            ${activity.type === 'call' ? this.icon('Phone', 16) :
+                                                              activity.type === 'email' ? this.icon('Mail', 16) :
                                                               this.icon('Calendar', 16)}
                                                             <div>
                                                                 <p class="font-medium text-sm">${activity.subject}</p>
@@ -3220,8 +3246,8 @@ if (!window.firebase.auth().currentUser) {
                                                                 </p>
                                                             </div>
                                                         </div>
-                                                        ${activity.completed ? 
-                                                            this.icon('Check', 16, 'text-green-500') : 
+                                                        ${activity.completed ?
+                                                            this.icon('Check', 16, 'text-green-500') :
                                                             this.icon('Clock', 16, 'text-yellow-500')
                                                         }
                                                     </div>
@@ -3230,7 +3256,7 @@ if (!window.firebase.auth().currentUser) {
                                     </div>
                                 `}
                             </div>
-                            
+
                             <div class="bg-white rounded-lg shadow p-4 lg:p-6">
                                 <h3 class="text-lg lg:text-xl font-semibold mb-4">Top Opportunities</h3>
                                 ${this.state.opportunities.length === 0 ? `
@@ -3258,6 +3284,11 @@ if (!window.firebase.auth().currentUser) {
                                     </div>
                                 `}
                             </div>
+                        </div>
+
+                        <!-- Team Calendar Section -->
+                        <div class="mt-6">
+                            ${this.renderOutlookCalendar()}
                         </div>
                     </div>
                 `;
