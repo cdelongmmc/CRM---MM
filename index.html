@@ -3724,13 +3724,29 @@ if (!window.firebase.auth().currentUser) {
                             <div class="${isCompleted ? 'cursor-pointer' : ''}" 
                                  ${isCompleted ? `onclick="app.viewActivity('${activity.id}')"` : ''}>
                                 <h4 class="font-medium ${isCompleted ? 'line-through text-gray-500' : ''}">${activity.subject}</h4>
-                                <p class="text-sm mt-1">
+                                <p class="text-sm">
                                     <a href="#" onclick="event.stopPropagation(); app.viewCustomerDetails('${activity.customerId}'); return false;"
                                        class="text-blue-600 hover:text-blue-800 hover:underline">
                                         ${customer?.name || 'Unknown'}
                                     </a>
                                 </p>
-                                <p class="text-sm ${isOverdue ? 'text-red-600' : 'text-gray-500'}">${activity.date} at ${activity.time}</p>
+                                <div class="text-xs text-gray-600 mt-1 space-y-0.5">
+                                    <div>
+                                        ${this.icon('Users', 12, 'inline mr-1')}
+                                        ${customer?.contacts?.[0]?.name || customer?.contact || 'n/a'}
+                                    </div>
+                                    <div>
+                                        ${this.icon('Phone', 12, 'inline mr-1')}
+                                        ${customer?.contacts?.[0]?.cell || customer?.phone || 'n/a'}
+                                    </div>
+                                    <div>
+                                        ${this.icon('Mail', 12, 'inline mr-1')}
+                                        ${customer?.contacts?.[0]?.email || customer?.email || 'n/a'}
+                                    </div>
+                                </div>
+                                <p class="text-sm ${isOverdue ? 'text-red-600' : 'text-gray-500'} mt-2">
+                                    ${activity.date} at ${activity.time}
+                                </p>
                                 <div class="flex items-center gap-2 mt-2">
                                     ${pipelineStage ? `
                                         <span class="inline-flex items-center px-2 py-1 text-xs rounded-full text-white ${pipelineStage.color}">
