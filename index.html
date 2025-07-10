@@ -8,45 +8,45 @@
     <!-- Updated Content Security Policy with WebSocket support and additional Google domains -->
     <meta http-equiv="Content-Security-Policy" content="
         default-src 'self';
-    script-src 'self' 'unsafe-inline' 'unsafe-eval'
-        https://cdn.tailwindcss.com
-        https://www.gstatic.com/
-        https://apis.google.com/
-        https://accounts.google.com/
-        https://www.googleapis.com/
-        https://securetoken.googleapis.com/
-        https://www.google.com/
-        https://www.googletagmanager.com/;
-    connect-src 'self'
-        https://*.googleapis.com
-        https://*.google.com
-        https://*.firebaseio.com
-        https://*.firebaseapp.com
-        wss://*.firebaseio.com
-        https://securetoken.googleapis.com/
-        https://www.googleapis.com/
-        https://accounts.google.com/
-        https://api.commoditic.com/
-        https://commodities-api.com/
-        https://api.apitube.io/
-        https://api.stlouisfed.org/;
-    frame-src 
-        https://accounts.google.com/ 
-        https://apis.google.com/
-        https://content.googleapis.com/
-        https://www.google.com/
-        https://securetoken.googleapis.com/
-        https://*.firebaseapp.com
-        https://outlook.office365.com/
-        https://outlook.office.com/;
-    style-src 'self' 'unsafe-inline' 
-        https://cdn.tailwindcss.com
-        https://accounts.google.com/
-        https://www.googleapis.com/;
-    img-src 'self' data: https: blob: 
-        https://*.googleusercontent.com
-        https://*.google.com
-        https://*.gstatic.com;
+        script-src 'self' 'unsafe-inline' 'unsafe-eval'
+            https://cdn.tailwindcss.com
+            https://www.gstatic.com/
+            https://apis.google.com/
+            https://accounts.google.com/
+            https://www.googleapis.com/
+            https://securetoken.googleapis.com/
+            https://www.google.com/
+            https://www.googletagmanager.com/;
+        connect-src 'self'
+            https://*.googleapis.com
+            https://*.google.com
+            https://*.firebaseio.com
+            https://*.firebaseapp.com
+            wss://*.firebaseio.com
+            https://securetoken.googleapis.com/
+            https://www.googleapis.com/
+            https://accounts.google.com/
+            https://api.commoditic.com/
+            https://commodities-api.com/
+            https://api.apitube.io/
+            https://api.stlouisfed.org/;
+        frame-src 
+            https://accounts.google.com/ 
+            https://apis.google.com/
+            https://content.googleapis.com/
+            https://www.google.com/
+            https://securetoken.googleapis.com/
+            https://*.firebaseapp.com
+            https://outlook.office365.com/
+            https://outlook.office.com/;
+        style-src 'self' 'unsafe-inline' 
+            https://cdn.tailwindcss.com
+            https://accounts.google.com/
+            https://www.googleapis.com/;
+        img-src 'self' data: https: blob: 
+            https://*.googleusercontent.com
+            https://*.google.com
+            https://*.gstatic.com;
     font-src 'self' data: 
         https://fonts.gstatic.com;
 ">
@@ -3243,8 +3243,13 @@ if (!window.firebase.auth().currentUser) {
                                                               this.icon('Calendar', 16)}
                                                             <div>
                                                                 <p class="font-medium text-sm">${activity.subject}</p>
-                                                                <p class="text-xs text-gray-600">
-                                                                    ${customer?.name || 'Unknown'} • ${activity.date}
+                                                                <p class="text-xs">
+                                                                    <a href="#" onclick="event.stopPropagation(); app.viewCustomerDetails('${activity.customerId}'); return false;"
+                                                                       class="text-blue-600 hover:text-blue-800 hover:underline">
+                                                                        ${customer?.name || 'Unknown'}
+                                                                    </a>
+                                                                    <span class="mx-1 text-gray-400">•</span>
+                                                                    <span>${activity.date}</span>
                                                                 </p>
                                                             </div>
                                                         </div>
@@ -3719,7 +3724,12 @@ if (!window.firebase.auth().currentUser) {
                             <div class="${isCompleted ? 'cursor-pointer' : ''}" 
                                  ${isCompleted ? `onclick="app.viewActivity('${activity.id}')"` : ''}>
                                 <h4 class="font-medium ${isCompleted ? 'line-through text-gray-500' : ''}">${activity.subject}</h4>
-                                <p class="text-sm text-gray-600">${customer?.name || 'Unknown'}</p>
+                                <p class="text-sm mt-1">
+                                    <a href="#" onclick="event.stopPropagation(); app.viewCustomerDetails('${activity.customerId}'); return false;"
+                                       class="text-blue-600 hover:text-blue-800 hover:underline">
+                                        ${customer?.name || 'Unknown'}
+                                    </a>
+                                </p>
                                 <p class="text-sm ${isOverdue ? 'text-red-600' : 'text-gray-500'}">${activity.date} at ${activity.time}</p>
                                 <div class="flex items-center gap-2 mt-2">
                                     ${pipelineStage ? `
@@ -4954,8 +4964,14 @@ if (!window.firebase.auth().currentUser) {
                                 </div>
                                 
                                 <div>
-                                    <p class="text-sm text-gray-500">Customer</p>
-                                    <p class="font-medium">${customer?.name || 'Unknown'}</p>
+                                    <p class="text-sm text-gray-500 mb-1">Customer</p>
+                                    <p class="font-medium">
+                                        <a href="#"
+                                           onclick="app.closeModal(); app.viewCustomerDetails('${activity.customerId}'); return false;"
+                                           class="text-blue-600 hover:text-blue-800 hover:underline">
+                                            ${customer?.name || 'Unknown'}
+                                        </a>
+                                    </p>
                                 </div>
                                 
                                 <div class="grid grid-cols-2 gap-4">
