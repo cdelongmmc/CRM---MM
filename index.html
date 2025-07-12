@@ -236,6 +236,8 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <!-- Google API Script for Calendar API -->
     <script src="https://apis.google.com/js/api.js"></script>
+    <!-- Microsoft Azure -->
+    <script src="https://alcdn.msauth.net/browser/2.30.0/js/msal-browser.min.js"></script>
 
     <script>
         // Firebase configuration
@@ -255,6 +257,18 @@
             apiKey: 'AIzaSyBFsW2Snv1c9OBcgh5P70KAEZ1JGYK_uXE',
             scope: 'https://www.googleapis.com/auth/calendar.events',
             discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest']
+        };
+        const MICROSOFT_CONFIG = {
+            // Azure App Configuration - Using your provided credentials
+            clientId: '1e620e1b-c6dc-4e6c-b0fd-b403d1e008df', // Your Azure Client ID
+            tenantId: 'common', // Using 'common' for multi-tenant (works with personal and work accounts)
+            redirectUri: window.location.origin, // Your CRM URL
+            scopes: [
+            'User.Read',
+            'Files.ReadWrite',
+            'Files.ReadWrite.All',
+            'Sites.ReadWrite.All'
+            ]
         };
 
         // Market Intelligence API Configuration
@@ -378,6 +392,24 @@
                     showCompletedActivities: false,
                     customerDetailTab: 'opportunities',
                     viewingCustomerId: null,
+                    excelIntegration: {
+                    isConnected: false,
+                    accessToken: null,
+                    excelFiles: [],
+                    activeFile: null,
+                    activeWorkbook: null,
+                    worksheets: [],
+                    activeWorksheet: null,
+                    cellData: [],
+                    isLoading: false,
+                    error: null,
+                    viewMode: 'grid', // 'grid' or 'iframe'
+                    autoSyncEnabled: false,
+                    lastSync: null,
+                    embeddedUrl: null
+                },
+                showExcelModal: false,
+                excelEditingCell: null,
                     
                     // Market Intelligence State
                     marketIntelligence: {
@@ -434,6 +466,7 @@
                 this.setupEventListeners();
                 await this.initGoogleCalendar();
                 this.setupMarketIntelligenceRefresh();
+                await this.initMicrosoftAuth();
                 this.render();
             }
 
@@ -568,10 +601,10 @@
                         console.log('Using fallback steel pricing data');
                         this.state.marketIntelligence.steelPrices = {
                             current: {
-                                steel: 775.50, // Current market average
-                                steelChange: 1.25,
-                                copper: 3.85,
-                                ironOre: 98.50,
+                                steel: 'API Failed', // Current market average
+                                steelChange: 0,
+                                copper: 0,
+                                ironOre: 0,
                                 timestamp: Date.now(),
                                 unit: 'USD/T',
                                 lastUpdate: new Date().toISOString().split('T')[0]
@@ -773,8 +806,8 @@
                         // Fallback news data
                         this.state.marketIntelligence.marketNews = [
                             {
-                                title: "Steel Prices Rise as Construction Demand Increases",
-                                description: "Major steel producers announce price increases following strong construction sector demand.",
+                                title: "error",
+                                description: "error",
                                 url: "#",
                                 publishedAt: new Date().toISOString(),
                                 source: "Steel Industry News",
@@ -782,8 +815,8 @@
                                 relevanceScore: 0.9
                             },
                             {
-                                title: "Nucor Reports Strong Q4 Earnings on Steel Demand",
-                                description: "Leading steel producer beats expectations amid robust industrial demand.",
+                                title: "error",
+                                description: "error",
                                 url: "#", 
                                 publishedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
                                 source: "Financial News",
@@ -798,8 +831,8 @@
                     // Use fallback news data
                     this.state.marketIntelligence.marketNews = [
                         {
-                            title: "Steel Market Outlook: Q1 2025 Analysis",
-                            description: "Industry experts analyze steel market trends and pricing forecasts for the first quarter.",
+                            title: "error",
+                            description: "error",
                             url: "#",
                             publishedAt: new Date().toISOString(),
                             source: "Market Analysis",
@@ -1236,6 +1269,717 @@
                         }).join('')}
                     </div>
                 `;
+            }
+
+            async initMicrosoftAuth() {
+                try {
+                    // Initialize MSAL
+                    this.msalConfig = {
+                        auth: {
+                            clientId: MICROSOFT_CONFIG.clientId,
+                            authority: `https://login.microsoftonline.com/${MICROSOFT_CONFIG.tenantId}`,
+                            redirectUri: MICROSOFT_CONFIG.redirectUri,
+                        },
+                        cache: {
+                            cacheLocation: "localStorage",
+                            storeAuthStateInCookie: false,
+                        }
+                    };
+
+                    this.msalInstance = new msal.PublicClientApplication(this.msalConfig);
+
+                    // Check if user is already logged in
+                    const accounts = this.msalInstance.getAllAccounts();
+                    if (accounts.length > 0) {
+                        this.state.excelIntegration.isConnected = true;
+                        await this.refreshMicrosoftToken();
+                    }
+                } catch (error) {
+                    console.error('Error initializing Microsoft auth:', error);
+                }
+            }
+
+            async connectToMicrosoft() {
+                try {
+                    const loginRequest = {
+                        scopes: MICROSOFT_CONFIG.scopes
+                    };
+
+                    const loginResponse = await this.msalInstance.loginPopup(loginRequest);
+                    this.state.excelIntegration.accessToken = loginResponse.accessToken;
+                    this.state.excelIntegration.isConnected = true;
+
+                    // Store connection state
+                    localStorage.setItem('microsoftConnected', 'true');
+
+                    this.render();
+
+                    // Fetch available Excel files
+                    await this.fetchExcelFiles();
+
+                } catch (error) {
+                    console.error('Login failed:', error);
+                    alert('Failed to connect to Microsoft. Please try again.');
+                }
+            }
+
+            async refreshMicrosoftToken() {
+                try {
+                    const accounts = this.msalInstance.getAllAccounts();
+                    if (accounts.length === 0) return;
+
+                    const silentRequest = {
+                        scopes: MICROSOFT_CONFIG.scopes,
+                        account: accounts[0]
+                    };
+
+                    const tokenResponse = await this.msalInstance.acquireTokenSilent(silentRequest);
+                    this.state.excelIntegration.accessToken = tokenResponse.accessToken;
+
+                } catch (error) {
+                    console.error('Token refresh failed:', error);
+                    // Fall back to interactive login
+                    await this.connectToMicrosoft();
+                }
+            }
+
+            async disconnectFromMicrosoft() {
+                const accounts = this.msalInstance.getAllAccounts();
+                if (accounts.length > 0) {
+                    await this.msalInstance.logoutPopup({
+                        account: accounts[0]
+                    });
+                }
+
+                this.state.excelIntegration = {
+                    isConnected: false,
+                    accessToken: null,
+                    excelFiles: [],
+                    activeFile: null,
+                    activeWorkbook: null,
+                    worksheets: [],
+                    activeWorksheet: null,
+                    cellData: [],
+                    isLoading: false,
+                    error: null,
+                    viewMode: 'grid',
+                    autoSyncEnabled: false,
+                    lastSync: null,
+                    embeddedUrl: null
+                };
+
+                localStorage.removeItem('microsoftConnected');
+                this.render();
+            }
+            // EXCEL FILE OPERATIONS
+            async fetchExcelFiles() {
+                try {
+                    this.state.excelIntegration.isLoading = true;
+                    this.render();
+
+                    const response = await fetch('https://graph.microsoft.com/v1.0/me/drive/root/search(q=\'.xlsx\')', {
+                        headers: {
+                            'Authorization': `Bearer ${this.state.excelIntegration.accessToken}`
+                        }
+                    });
+
+                    if (!response.ok) throw new Error('Failed to fetch files');
+
+                    const data = await response.json();
+                    this.state.excelIntegration.excelFiles = data.value.filter(file =>
+                        file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
+                    );
+
+                    this.state.excelIntegration.isLoading = false;
+                    this.render();
+
+                } catch (error) {
+                    console.error('Error fetching Excel files:', error);
+                    this.state.excelIntegration.error = error.message;
+                    this.state.excelIntegration.isLoading = false;
+                    this.render();
+                }
+            }
+
+            async openExcelFile(fileId) {
+                try {
+                    this.state.excelIntegration.isLoading = true;
+                    this.state.excelIntegration.activeFile = fileId;
+                    this.render();
+
+                    // Get file metadata
+                    const fileResponse = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${fileId}`, {
+                        headers: {
+                            'Authorization': `Bearer ${this.state.excelIntegration.accessToken}`
+                        }
+                    });
+
+                    const fileData = await fileResponse.json();
+                    this.state.excelIntegration.activeWorkbook = fileData;
+
+                    // Get embed URL for iframe view
+                    if (fileData.webUrl) {
+                        // Convert share URL to embed URL
+                        const embedUrl = fileData.webUrl.replace('/view', '/embed');
+                        this.state.excelIntegration.embeddedUrl = embedUrl;
+                    }
+
+                    // Fetch worksheets
+                    await this.fetchWorksheets(fileId);
+
+                    // If in grid view, load the first worksheet
+                    if (this.state.excelIntegration.viewMode === 'grid' && this.state.excelIntegration.worksheets.length > 0) {
+                        await this.loadWorksheet(fileId, this.state.excelIntegration.worksheets[0].id);
+                    }
+
+                    this.state.excelIntegration.isLoading = false;
+                    this.render();
+
+                } catch (error) {
+                    console.error('Error opening Excel file:', error);
+                    this.state.excelIntegration.error = error.message;
+                    this.state.excelIntegration.isLoading = false;
+                    this.render();
+                }
+            }
+
+            async fetchWorksheets(fileId) {
+                try {
+                    const response = await fetch(
+                        `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/worksheets`,
+                        {
+                            headers: {
+                                'Authorization': `Bearer ${this.state.excelIntegration.accessToken}`
+                            }
+                        }
+                    );
+
+                    const data = await response.json();
+                    this.state.excelIntegration.worksheets = data.value;
+
+                } catch (error) {
+                    console.error('Error fetching worksheets:', error);
+                }
+            }
+
+            async loadWorksheet(fileId, worksheetId) {
+                try {
+                    this.state.excelIntegration.isLoading = true;
+                    this.state.excelIntegration.activeWorksheet = worksheetId;
+                    this.render();
+
+                    // Get used range
+                    const rangeResponse = await fetch(
+                        `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/worksheets/${worksheetId}/usedRange`,
+                        {
+                            headers: {
+                                'Authorization': `Bearer ${this.state.excelIntegration.accessToken}`
+                            }
+                        }
+                    );
+
+                    const rangeData = await rangeResponse.json();
+
+                    if (rangeData.values) {
+                        // Process the data into a more usable format
+                        const processedData = this.processExcelData(rangeData);
+                        this.state.excelIntegration.cellData = processedData;
+                    }
+
+                    this.state.excelIntegration.isLoading = false;
+                    this.state.excelIntegration.lastSync = new Date().toISOString();
+                    this.render();
+
+                } catch (error) {
+                    console.error('Error loading worksheet:', error);
+                    this.state.excelIntegration.error = error.message;
+                    this.state.excelIntegration.isLoading = false;
+                    this.render();
+                }
+            }
+
+            processExcelData(rangeData) {
+                const { values, rowCount, columnCount } = rangeData;
+                const processedData = {
+                    headers: values[0] || [], // First row as headers
+                    rows: values.slice(1) || [], // Rest as data rows
+                    rowCount,
+                    columnCount,
+                    rawData: values
+                };
+
+                return processedData;
+            }
+
+            async updateCell(fileId, worksheetId, row, column, value) {
+                try {
+                    // Convert row/column to Excel notation (e.g., A1, B2)
+                    const cellAddress = this.getCellAddress(row, column);
+
+                    const response = await fetch(
+                        `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/worksheets/${worksheetId}/range(address='${cellAddress}')`,
+                        {
+                            method: 'PATCH',
+                            headers: {
+                                'Authorization': `Bearer ${this.state.excelIntegration.accessToken}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                values: [[value]]
+                            })
+                        }
+                    );
+
+                    if (!response.ok) throw new Error('Failed to update cell');
+
+                    // Update local data
+                    if (this.state.excelIntegration.cellData.rawData[row]) {
+                        this.state.excelIntegration.cellData.rawData[row][column] = value;
+                        if (row > 0) {
+                            this.state.excelIntegration.cellData.rows[row - 1][column] = value;
+                        } else {
+                            this.state.excelIntegration.cellData.headers[column] = value;
+                        }
+                    }
+
+                    this.state.excelIntegration.lastSync = new Date().toISOString();
+                    this.render();
+
+                } catch (error) {
+                    console.error('Error updating cell:', error);
+                    alert('Failed to update cell. Please try again.');
+                }
+            }
+
+            getCellAddress(row, column) {
+                // Convert column index to letter (0 -> A, 1 -> B, etc.)
+                let columnLetter = '';
+                let temp = column;
+
+                while (temp >= 0) {
+                    columnLetter = String.fromCharCode((temp % 26) + 65) + columnLetter;
+                    temp = Math.floor(temp / 26) - 1;
+                }
+
+                return `${columnLetter}${row + 1}`;
+            }
+
+            async addRow(fileId, worksheetId, rowData) {
+                try {
+                    // Get current used range
+                    const rangeResponse = await fetch(
+                        `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/worksheets/${worksheetId}/usedRange`,
+                        {
+                            headers: {
+                                'Authorization': `Bearer ${this.state.excelIntegration.accessToken}`
+                            }
+                        }
+                    );
+
+                    const rangeData = await rangeResponse.json();
+                    const newRowIndex = rangeData.rowCount;
+
+                    // Insert new row
+                    const response = await fetch(
+                        `https://graph.microsoft.com/v1.0/me/drive/items/${fileId}/workbook/worksheets/${worksheetId}/range(address='A${newRowIndex + 1}:${this.getCellAddress(newRowIndex, rowData.length - 1)}')`,
+                        {
+                            method: 'PATCH',
+                            headers: {
+                                'Authorization': `Bearer ${this.state.excelIntegration.accessToken}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                values: [rowData]
+                            })
+                        }
+                    );
+
+                    if (!response.ok) throw new Error('Failed to add row');
+
+                    // Reload worksheet data
+                    await this.loadWorksheet(fileId, worksheetId);
+
+                } catch (error) {
+                    console.error('Error adding row:', error);
+                    alert('Failed to add row. Please try again.');
+                }
+            }
+
+            async syncCustomersToExcel() {
+                if (!this.state.excelIntegration.activeFile || !this.state.excelIntegration.activeWorksheet) {
+                    alert('Please open an Excel file first');
+                    return;
+                }
+
+                try {
+                    this.state.excelIntegration.isLoading = true;
+                    this.render();
+
+                    // Prepare customer data for Excel
+                    const headers = ['ID', 'Company Name', 'Industry', 'Contact Name', 'Email', 'Phone', 'Status', 'Pipeline Stage', 'Products'];
+                    const rows = this.state.customers.map(customer => [
+                        customer.id,
+                        customer.name,
+                        customer.industry || '',
+                        customer.contacts?.[0]?.name || customer.contact || '',
+                        customer.contacts?.[0]?.email || customer.email || '',
+                        customer.contacts?.[0]?.cell || customer.phone || '',
+                        customer.status || '',
+                        customer.pipelineStage || '',
+                        (customer.primaryProducts || []).join('; ')
+                    ]);
+
+                    const allData = [headers, ...rows];
+
+                    // Update the entire worksheet
+                    const response = await fetch(
+                        `https://graph.microsoft.com/v1.0/me/drive/items/${this.state.excelIntegration.activeFile}/workbook/worksheets/${this.state.excelIntegration.activeWorksheet}/range(address='A1:I${allData.length}')`,
+                        {
+                            method: 'PATCH',
+                            headers: {
+                                'Authorization': `Bearer ${this.state.excelIntegration.accessToken}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                values: allData
+                            })
+                        }
+                    );
+
+                    if (!response.ok) throw new Error('Failed to sync data');
+
+                    // Reload worksheet
+                    await this.loadWorksheet(this.state.excelIntegration.activeFile, this.state.excelIntegration.activeWorksheet);
+
+                    alert('Customer data synced to Excel successfully!');
+
+                } catch (error) {
+                    console.error('Error syncing to Excel:', error);
+                    alert('Failed to sync data. Please try again.');
+                } finally {
+                    this.state.excelIntegration.isLoading = false;
+                    this.render();
+                }
+            }
+
+            async importFromExcel() {
+                if (!this.state.excelIntegration.cellData.rows) {
+                    alert('No data to import');
+                    return;
+                }
+
+                try {
+                    const headers = this.state.excelIntegration.cellData.headers;
+                    const rows = this.state.excelIntegration.cellData.rows;
+
+                    // Map Excel columns to customer fields
+                    const nameIndex = headers.findIndex(h => h.toLowerCase().includes('company') || h.toLowerCase().includes('name'));
+                    const industryIndex = headers.findIndex(h => h.toLowerCase().includes('industry'));
+                    const contactIndex = headers.findIndex(h => h.toLowerCase().includes('contact'));
+                    const emailIndex = headers.findIndex(h => h.toLowerCase().includes('email'));
+                    const phoneIndex = headers.findIndex(h => h.toLowerCase().includes('phone'));
+                    const statusIndex = headers.findIndex(h => h.toLowerCase().includes('status'));
+
+                    const importedCustomers = rows.map((row, index) => ({
+                        id: Date.now().toString() + index,
+                        name: row[nameIndex] || '',
+                        industry: row[industryIndex] || '',
+                        contacts: [{
+                            name: row[contactIndex] || '',
+                            email: row[emailIndex] || '',
+                            cell: row[phoneIndex] || '',
+                            title: ''
+                        }],
+                        status: row[statusIndex] || 'prospect',
+                        pipelineStage: 'lead',
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
+                    })).filter(customer => customer.name); // Only import rows with company names
+
+                    if (confirm(`Import ${importedCustomers.length} customers from Excel?`)) {
+                        this.state.customers.push(...importedCustomers);
+                        this.saveAllToLocalStorage();
+
+                        if (this.state.firebaseDb && this.state.isOnline) {
+                            for (const customer of importedCustomers) {
+                                await this.state.firebaseDb.ref(`customers/${customer.id}`).set(customer);
+                            }
+                        }
+
+                        alert(`Successfully imported ${importedCustomers.length} customers!`);
+                        this.render();
+                    }
+
+                } catch (error) {
+                    console.error('Error importing from Excel:', error);
+                    alert('Failed to import data. Please check the Excel format.');
+                }
+            }
+            renderExcelIntegration() {
+                return `
+                    <div class="p-4 lg:p-8">
+                        <div class="flex justify-between items-center mb-6">
+                            <h2 class="text-2xl lg:text-3xl font-bold">Excel Integration</h2>
+                            <div class="flex space-x-3">
+                                ${this.state.excelIntegration.isConnected ? `
+                                    <button onclick="app.state.excelIntegration.autoSyncEnabled = !app.state.excelIntegration.autoSyncEnabled; app.render()"
+                                            class="flex items-center space-x-2 px-4 py-2 rounded-lg ${
+                                                this.state.excelIntegration.autoSyncEnabled 
+                                                    ? 'bg-green-600 text-white hover:bg-green-700' 
+                                                    : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
+                                            }">
+                                        ${this.icon('RefreshCw', 20)}
+                                        <span>Auto-Sync: ${this.state.excelIntegration.autoSyncEnabled ? 'ON' : 'OFF'}</span>
+                                    </button>
+                                    <button onclick="app.disconnectFromMicrosoft()"
+                                            class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                                        Disconnect
+                                    </button>
+                                ` : `
+                                    <button onclick="app.connectToMicrosoft()"
+                                            class="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                                        ${this.icon('Cloud', 20)}
+                                        <span>Connect to OneDrive</span>
+                                    </button>
+                                `}
+                                <button onclick="app.setView('dashboard')"
+                                        class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                                    Back to Dashboard
+                                </button>
+                            </div>
+                        </div>
+
+                        ${!this.state.excelIntegration.isConnected ? `
+                            <div class="bg-white rounded-lg shadow p-8 text-center">
+                                <div class="max-w-md mx-auto">
+                                    <svg class="w-24 h-24 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                    </svg>
+                                    <h3 class="text-xl font-semibold mb-2">Connect to Microsoft OneDrive</h3>
+                                    <p class="text-gray-600 mb-6">
+                                        Access and edit your Excel files directly from your CRM. 
+                                        Sync customer data, track inventory, and manage reports all in one place.
+                                    </p>
+                                    <button onclick="app.connectToMicrosoft()"
+                                            class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 text-lg">
+                                        Connect to OneDrive
+                                    </button>
+                                </div>
+                            </div>
+                        ` : `
+                            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                                <!-- File List Sidebar -->
+                                <div class="lg:col-span-1">
+                                    <div class="bg-white rounded-lg shadow p-4">
+                                        <h3 class="font-semibold mb-4">Excel Files</h3>
+                                        <button onclick="app.fetchExcelFiles()"
+                                                class="w-full mb-4 text-sm text-blue-600 hover:text-blue-800 flex items-center justify-center space-x-2">
+                                            ${this.icon('RefreshCw', 16)}
+                                            <span>Refresh Files</span>
+                                        </button>
+                                        <div class="space-y-2 max-h-96 overflow-y-auto">
+                                            ${this.state.excelIntegration.excelFiles.map(file => `
+                                                <button onclick="app.openExcelFile('${file.id}')"
+                                                        class="w-full text-left p-3 rounded ${
+                                                            this.state.excelIntegration.activeFile === file.id 
+                                                                ? 'bg-blue-50 border border-blue-200' 
+                                                                : 'hover:bg-gray-50'
+                                                        }">
+                                                    <div class="flex items-center space-x-2">
+                                                        <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path d="M9 2a2 2 0 00-2 2v8a2 2 0 002 2h6a2 2 0 002-2V6.414A2 2 0 0016.414 5L14 2.586A2 2 0 0012.586 2H9z"></path>
+                                                            <path d="M3 8a2 2 0 012-2v10h8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"></path>
+                                                        </svg>
+                                                        <div class="flex-1 min-w-0">
+                                                            <p class="text-sm font-medium truncate">${file.name}</p>
+                                                            <p class="text-xs text-gray-500">
+                                                                ${new Date(file.lastModifiedDateTime).toLocaleDateString()}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </button>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                    
+                                    ${this.state.excelIntegration.activeFile ? `
+                                        <div class="bg-white rounded-lg shadow p-4 mt-4">
+                                            <h4 class="font-semibold mb-3">Actions</h4>
+                                            <div class="space-y-2">
+                                                <button onclick="app.syncCustomersToExcel()"
+                                                        class="w-full text-sm bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700">
+                                                    Export Customers to Excel
+                                                </button>
+                                                <button onclick="app.importFromExcel()"
+                                                        class="w-full text-sm bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700">
+                                                    Import from Excel
+                                                </button>
+                                                <button onclick="app.state.excelIntegration.viewMode = app.state.excelIntegration.viewMode === 'grid' ? 'iframe' : 'grid'; app.render()"
+                                                        class="w-full text-sm bg-purple-600 text-white px-3 py-2 rounded hover:bg-purple-700">
+                                                    Switch to ${this.state.excelIntegration.viewMode === 'grid' ? 'Embedded' : 'Grid'} View
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                </div>
+
+                                <!-- Main Content Area -->
+                                <div class="lg:col-span-3">
+                                    ${this.state.excelIntegration.activeFile ? 
+                                        this.renderExcelContent() : 
+                                        this.renderExcelPlaceholder()
+                                    }
+                                </div>
+                            </div>
+                        `}
+
+                        ${this.state.excelIntegration.lastSync ? `
+                            <div class="mt-4 text-center text-sm text-gray-500">
+                                Last synced: ${new Date(this.state.excelIntegration.lastSync).toLocaleString()}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+
+            renderExcelContent() {
+                if (this.state.excelIntegration.viewMode === 'iframe' && this.state.excelIntegration.embeddedUrl) {
+                    return `
+                        <div class="bg-white rounded-lg shadow" style="height: 600px;">
+                            <iframe src="${this.state.excelIntegration.embeddedUrl}" 
+                                    width="100%" 
+                                    height="100%" 
+                                    frameborder="0"
+                                    class="rounded-lg">
+                                This browser does not support embedded Excel files.
+                            </iframe>
+                        </div>
+                    `;
+                } else {
+                    return this.renderExcelGrid();
+                }
+            }
+
+            renderExcelGrid() {
+                const data = this.state.excelIntegration.cellData;
+                
+                if (!data || !data.headers) {
+                    return `
+                        <div class="bg-white rounded-lg shadow p-8 text-center">
+                            <p class="text-gray-500">Loading worksheet data...</p>
+                        </div>
+                    `;
+                }
+                
+                return `
+                    <div class="bg-white rounded-lg shadow">
+                        <div class="p-4 border-b">
+                            <div class="flex justify-between items-center">
+                                <h3 class="font-semibold">
+                                    ${this.state.excelIntegration.activeWorkbook?.name || 'Excel File'}
+                                </h3>
+                                <select onchange="app.loadWorksheet('${this.state.excelIntegration.activeFile}', this.value)"
+                                        class="px-3 py-1 border rounded">
+                                    ${this.state.excelIntegration.worksheets.map(ws => `
+                                        <option value="${ws.id}" ${ws.id === this.state.excelIntegration.activeWorksheet ? 'selected' : ''}>
+                                            ${ws.name}
+                                        </option>
+                                    `).join('')}
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="overflow-auto" style="max-height: 500px;">
+                            <table class="w-full">
+                                <thead class="bg-gray-50 sticky top-0">
+                                    <tr>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            #
+                                        </th>
+                                        ${data.headers.map((header, index) => `
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                ${header || `Column ${index + 1}`}
+                                            </th>
+                                        `).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    ${data.rows.map((row, rowIndex) => `
+                                        <tr class="hover:bg-gray-50">
+                                            <td class="px-4 py-2 text-sm text-gray-500">
+                                                ${rowIndex + 2}
+                                            </td>
+                                            ${row.map((cell, colIndex) => `
+                                                <td class="px-4 py-2 text-sm">
+                                                    <div class="editable-cell"
+                                                         contenteditable="true"
+                                                         data-row="${rowIndex + 1}"
+                                                         data-col="${colIndex}"
+                                                         onblur="app.handleCellEdit(this, ${rowIndex + 1}, ${colIndex})"
+                                                         onkeydown="if(event.key === 'Enter') { event.preventDefault(); this.blur(); }">
+                                                        ${cell || ''}
+                                                    </div>
+                                                </td>
+                                            `).join('')}
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="p-4 border-t bg-gray-50">
+                            <button onclick="app.showAddRowDialog()"
+                                    class="text-sm text-blue-600 hover:text-blue-800">
+                                + Add Row
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            renderExcelPlaceholder() {
+                return `
+                    <div class="bg-white rounded-lg shadow p-8 text-center">
+                        <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path>
+                        </svg>
+                        <h3 class="text-lg font-semibold mb-2">Select an Excel File</h3>
+                        <p class="text-gray-600">
+                            Choose a file from the list to view and edit its contents
+                        </p>
+                    </div>
+                `;
+            }
+
+            handleCellEdit(element, row, col) {
+                const newValue = element.textContent.trim();
+                const oldValue = this.state.excelIntegration.cellData.rawData[row][col];
+                
+                if (newValue !== oldValue) {
+                    this.updateCell(
+                        this.state.excelIntegration.activeFile,
+                        this.state.excelIntegration.activeWorksheet,
+                        row,
+                        col,
+                        newValue
+                    );
+                }
+            }
+
+            showAddRowDialog() {
+                const columnCount = this.state.excelIntegration.cellData.headers.length;
+                const newRow = new Array(columnCount).fill('');
+                
+                // Simple prompt for demo - you can enhance this with a proper modal
+                const firstColumnValue = prompt('Enter value for first column:');
+                if (firstColumnValue) {
+                    newRow[0] = firstColumnValue;
+                    this.addRow(
+                        this.state.excelIntegration.activeFile,
+                        this.state.excelIntegration.activeWorksheet,
+                        newRow
+                    );
+                }
             }
 
             // Continue with Google Calendar initialization
@@ -3031,6 +3775,8 @@ if (!window.firebase.auth().currentUser) {
                         return this.renderActivities();
                     case 'market-intelligence':
                         return this.renderMarketIntelligenceDashboard();
+                    case 'excel':
+                        return this.renderExcelIntegration();
                     default:
                         return this.renderDashboard();
                 }
@@ -3041,8 +3787,7 @@ if (!window.firebase.auth().currentUser) {
                     <!-- Mobile Header -->
                     <div class="lg:hidden bg-gray-900 text-white p-4 flex items-center justify-between fixed top-0 left-0 right-0 z-50 safe-top">
                         <div>
-                            <h1 class="text-xl font-bold">Major Metals CRM</h1>
-                            <p class="text-gray-400 text-xs">Steel Tubing Solutions</p>
+                            <h1 class="text-xl font-bold">MMC CRM</h1>
                         </div>
                         <button onclick="app.toggleMobileMenu()" class="p-2 hover:bg-gray-800 rounded-lg">
                             ${this.icon('Menu', 24)}
@@ -3080,7 +3825,6 @@ if (!window.firebase.auth().currentUser) {
                                 </div>
                             ` : ''}
                         </div>
-                        
                         <nav class="space-y-2 flex-1 overflow-y-auto" style="max-height: calc(100vh - 250px);">
                             ${[
                                 { id: 'dashboard', icon: 'BarChart3', label: 'Dashboard' },
@@ -3088,7 +3832,8 @@ if (!window.firebase.auth().currentUser) {
                                 { id: 'pipeline', icon: 'TrendingUp', label: 'Sales Pipeline' },
                                 { id: 'quotes', icon: 'FileText', label: 'Quotes' },
                                 { id: 'activities', icon: 'Calendar', label: 'Activities' },
-                                { id: 'market-intelligence', icon: 'TrendingUp', label: 'Market Intel' }
+                                { id: 'market-intelligence', icon: 'TrendingUp', label: 'Market Intel' },
+                                { id: 'excel', icon: 'FileText', label: 'Tube Quoter' }
                             ].map(item => `
                                 <button 
                                     onclick="app.setView('${item.id}')"
@@ -3125,7 +3870,7 @@ if (!window.firebase.auth().currentUser) {
                     </div>
                 `;
             }
-
+            
             renderGlobalSearchResults() {
                 const results = this.state.globalSearchResults;
                 const hasResults = Object.values(results).some(arr => arr.length > 0);
