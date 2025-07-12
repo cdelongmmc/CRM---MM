@@ -261,7 +261,7 @@
         const MICROSOFT_CONFIG = {
             // Azure App Configuration - Using your provided credentials
             clientId: '1e620e1b-c6dc-4e6c-b0fd-b403d1e008df', // Your Azure Client ID
-            tenantId: 'common', // Using 'common' for multi-tenant (works with personal and work accounts)
+            tenantId: 'f700d315-223c-4939-a49a-1ebef89110f6', // Using 'common' for multi-tenant (works with personal and work accounts)
             redirectUri: window.location.origin, // Your CRM URL
             scopes: [
             'User.Read',
@@ -269,6 +269,13 @@
             'Files.ReadWrite.All',
             'Sites.ReadWrite.All'
             ]
+        };
+        const msalConfig = {
+            auth: {
+                clientId: "1e620e1b-c6dc-4e6c-b0fd-b403d1e008df",
+                authority: "https://login.microsoftonline.com/f700d315-223c-4939-a49a-1ebef89110f6", // e.g., "https://login.microsoftonline.com/f700d315-223c-4939-a49a-1ebef89110f6"
+                redirectUri: "https://lorcania11.github.io/CRM---MM/",
+            }
         };
 
         // Market Intelligence API Configuration
